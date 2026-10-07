@@ -7,7 +7,7 @@ import { WebSocketServer } from 'ws';
 import { Game, randomGameId } from './game.js';
 import {
   DEFAULT_WORD_LIST_ID,
-  communityMeta,
+  getOfficialPack,
   officialMeta,
   getWordListMeta,
   wordListExists,
@@ -39,8 +39,8 @@ function allowCreate(ip) {
   return true;
 }
 
-function createGame(opts) {
-  const id = randomGameId((x) => games.has(x));
+function createGame(opts, wantedId) {
+  const id = wantedId || randomGameId((x) => games.has(x));
   const game = new Game(id, opts);
   games.set(id, game);
   return game;
@@ -74,8 +74,26 @@ api.post('/games', (req, res) => {
       return res.status(400).type('text/plain').send('word list not found');
     }
   }
-  const game = createGame({ wordListId, streamerMode: body.streamerMode === true });
+  let code;
+  if (body.code !== undefined && body.code !== null && body.code !== '') {
+    code = String(body.code).trim().toLowerCase();
+    if (!/^[a-z]{4}$/.test(code)) return res.status(400).type('text/plain').send('the code must be 4 letters (a-z)');
+    if (games.has(code)) return res.status(409).type('text/plain').send(`code ${code.toUpperCase()} is already in use`);
+  }
+  const game = createGame({ wordListId, streamerMode: body.streamerMode === true }, code);
   res.json({ gameId: game.id });
+});
+
+// public lobby list (streamer-mode games stay hidden)
+api.get('/lobbies', (req, res) => {
+  const list = [];
+  for (const g of games.values()) {
+    if (g.settings.streamerMode || g.finished) continue;
+    if (g.userCount === 0) continue;
+    list.push(g.lobbyInfo());
+  }
+  list.sort((a, b) => Number(b.canJoin) - Number(a.canJoin) || b.players.length - a.players.length || a.id.localeCompare(b.id));
+  res.json(list);
 });
 
 api.get('/games/:id', (req, res) => {
@@ -114,9 +132,15 @@ api.post('/wordpacks', packJson, (req, res) => {
 });
 
 api.get('/wordlists', (req, res) => {
-  if (req.query.type === 'community') return res.json(communityMeta());
   if (req.query.type === 'official') return res.json(officialMeta());
   res.json([]);
+});
+
+// full word list of an official pack (used to clone it in the word pack editor)
+api.get('/wordlists/:id/words', (req, res) => {
+  const pack = getOfficialPack(parseInt(req.params.id, 10));
+  if (!pack) return res.sendStatus(404);
+  res.json(pack);
 });
 
 api.get('/wordlists/:id', (req, res) => {

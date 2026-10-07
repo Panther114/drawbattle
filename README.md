@@ -13,7 +13,7 @@ network protocol, timings and rules were recorded by playing real games against 
 | ![drawing](docs/screenshots/05-drawing.png) **drawing & guessing** | ![round result](docs/screenshots/06-round-result.png) **round result** |
 | ![score](docs/screenshots/07-score.png) **score screen** | ![final drawdown](docs/screenshots/08-final-drawdown.png) **the final drawdown** |
 | ![summary](docs/screenshots/09-summary.png) **summary & recap** | ![rules](docs/screenshots/10-customize-rules.png) **customize rules** |
-| ![word pack creator](docs/screenshots/11-word-pack-creator.png) **word pack creator** | ![letter hints](docs/screenshots/12-letter-hints.png) **letter hints (custom rule)** |
+| ![word pack editor](docs/screenshots/11-word-pack-creator.png) **word pack editor** | ![letter hints](docs/screenshots/12-letter-hints.png) **letter hints (custom rule)** |
 
 ## customization (not in the original)
 
@@ -28,15 +28,24 @@ chill, chaos). All rules are stored in the game's settings, so they apply to eve
 | guessing | 2-4 words to choose from, letter hints every N seconds, forgive one typo, single-word answers only, longest word allowed |
 | players | max team size, allow spectators, allow joining after the start |
 
-The lobby also offers more round counts (4-40) and round lengths (10 s - 5 min).
+Every number rule (and the round count and round length in the lobby) takes a typed whole number, clamped to a sane range
+(rounds 1-200, round length 5-600 s).
 
-### word pack creator
+### game codes and lobbies
 
-Open **create your own word pack** on the home page (`/wordpacks`) or the **my packs** tab of the word pack window in a lobby.
-Packs live in your browser (localStorage). You can create and edit packs, clean up / sort / shuffle, import single files or
-a **whole folder** (each `.txt`, `.csv` or `.json` file becomes a pack), and export as `.json` / `.txt`.
+**new game** lets you pick your own 4-letter code (or press *random*; leaving it empty also picks a random one).
+The **lobbies** page (`/lobbies`) lists every open game with its players and progress; games that haven't started and
+aren't full can be joined directly, and any game that allows spectators has a **spectate** button
+(`/CODE?spectate=1`). Streamer-mode games are not listed.
+
+### word pack editor
+
+There is one official word pack. Open the **word pack editor** on the home page (`/wordpacks`) or the **my packs** tab of the
+word pack window in a lobby. **clone official pack** copies the official words into your own pack to use as a base.
+Packs live in your browser (localStorage). You can create and edit packs, show 1-5 words per row, clean up / sort / shuffle,
+import single files or a **whole folder** (each `.txt`, `.csv` or `.json` file becomes a pack), and export as `.json` / `.txt`.
 **use in this game** uploads the pack to the server (kept in memory for 24 h, max 3000 words) and selects it for the
-lobby; **get a shareable id** gives a 6-digit id anyone can enter under *browse all packs → community packs*.
+lobby; **get a shareable id** gives a 6-digit id anyone can enter under *browse all packs → enter a custom word pack id*.
 
 ## run
 

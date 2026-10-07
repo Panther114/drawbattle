@@ -10,6 +10,8 @@ import {
   savePacks,
   uploadPack,
 } from '../localpacks.js';
+import { fetchOfficialWords } from '../wordpacks.js';
+import { safeStorage } from '../storage.js';
 import Btn from './Btn.vue';
 
 // gameId is set when the editor is used from a lobby: packs can then be picked for that game
@@ -24,11 +26,20 @@ const statusKind = ref('info');
 const busy = ref(false);
 const importPreview = ref();
 const fileInput = ref();
+const COLUMN_CHOICES = [1, 2, 3, 4, 5];
+const prefs = safeStorage('local');
+// words per row: 1 = plain text box, 2-5 = a grid of editable words
+const columns = ref(Math.min(5, Math.max(1, parseInt(prefs?.getItem('dbEditorCols') || '1', 10) || 1)));
+const newWord = ref('');
 const dirInput = ref();
 
 const lines = computed(() => text.value.split('\n'));
-const wordCount = computed(() => cleanWords(lines.value).length);
-const dupes = computed(() => lines.value.map((l) => l.trim()).filter(Boolean).length - wordCount.value);
+const wordCount = computed(() =>
+  columns.value > 1 && selected.value ? selected.value.words.length : cleanWords(lines.value).length,
+);
+const dupes = computed(() =>
+  columns.value > 1 ? 0 : lines.value.map((l) => l.trim()).filter(Boolean).length - wordCount.value,
+);
 
 watch(
   selected,
@@ -37,6 +48,18 @@ watch(
   },
   { immediate: true },
 );
+
+function setColumns(n) {
+  if (n === columns.value) return;
+  // leaving the grid: refresh the text box from the (possibly edited) words
+  if (columns.value > 1 && n === 1 && selected.value) text.value = selected.value.words.join('\n');
+  columns.value = n;
+  try {
+    prefs?.setItem('dbEditorCols', String(n));
+  } catch {
+    // ignore
+  }
+}
 
 function say(msg, kind = 'info') {
   status.value = msg;
@@ -47,9 +70,10 @@ function say(msg, kind = 'info') {
 function commit() {
   const p = selected.value;
   if (!p) return;
-  p.words = cleanWords(lines.value);
+  p.words = cleanWords(columns.value > 1 ? p.words : lines.value);
   savePacks();
 }
+const currentWords = () => cleanWords(columns.value > 1 && selected.value ? selected.value.words : lines.value);
 function onText(e) {
   text.value = e.target.value;
   const p = selected.value;
@@ -66,13 +90,13 @@ function tidy() {
 }
 function sortWords() {
   if (!selected.value) return;
-  selected.value.words = cleanWords(lines.value).sort((a, b) => a.localeCompare(b));
+  selected.value.words = currentWords().sort((a, b) => a.localeCompare(b));
   text.value = selected.value.words.join('\n');
   savePacks();
 }
 function shuffleWords() {
   if (!selected.value) return;
-  const a = cleanWords(lines.value);
+  const a = currentWords();
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
@@ -91,6 +115,50 @@ function remove() {
   deletePack(p);
   selectedUid.value = localPacks[0]?.uid;
 }
+// grid editing: changes go straight into the pack's word list
+function onCell(i, e) {
+  const p = selected.value;
+  if (!p) return;
+  const w = e.target.value.trim().replace(/\s+/g, ' ').slice(0, 40);
+  const dup = p.words.some((x, j) => j !== i && x.toLowerCase() === w.toLowerCase());
+  if (!w || dup) p.words.splice(i, 1);
+  else p.words[i] = w;
+  savePacks();
+}
+function removeWord(i) {
+  const p = selected.value;
+  if (!p) return;
+  p.words.splice(i, 1);
+  savePacks();
+}
+function addWord() {
+  const p = selected.value;
+  const w = newWord.value.trim().replace(/\s+/g, ' ').slice(0, 40);
+  newWord.value = '';
+  if (!p || !w) return;
+  if (p.words.some((x) => x.toLowerCase() === w.toLowerCase())) {
+    say(`"${w}" is already in the pack`, 'error');
+    return;
+  }
+  p.words.unshift(w);
+  savePacks();
+}
+
+// ---- cloning the official pack ----
+async function cloneOfficial() {
+  busy.value = true;
+  try {
+    const official = await fetchOfficialWords();
+    const p = createPack({ name: `${official.name} (my copy)`, description: 'cloned from the official pack', words: official.words });
+    selectedUid.value = p.uid;
+    say(`cloned the official pack: ${p.words.length} words, edit away!`);
+  } catch (e) {
+    say(e.message, 'error');
+  } finally {
+    busy.value = false;
+  }
+}
+
 function duplicate() {
   const p = selected.value;
   if (!p) return;
@@ -181,6 +249,7 @@ async function shareId() {
       </button>
       <div v-if="localPacks.length === 0" class="pe-empty">no word packs yet</div>
       <div class="pe-side-actions">
+        <button class="pe-link pe-clone" :disabled="busy" @click="cloneOfficial">clone official pack</button>
         <button class="pe-link" @click="newPack">+ new pack</button>
         <button class="pe-link" :disabled="busy" @click="fileInput.click()">import files</button>
         <button class="pe-link" :disabled="busy" @click="dirInput.click()">import folder</button>
@@ -212,13 +281,39 @@ async function shareId() {
           placeholder="description (optional)"
           @input="savePacks"
         />
+        <div class="pe-cols">
+          <span class="pe-cols-label">words per row</span>
+          <button
+            v-for="n in COLUMN_CHOICES"
+            :key="n"
+            class="pe-col-btn"
+            :class="{ on: columns === n }"
+            :title="n === 1 ? 'plain text editor' : `${n} words per row`"
+            @click="setColumns(n)"
+          >
+            {{ n }}
+          </button>
+        </div>
         <textarea
+          v-if="columns === 1"
           class="pe-words"
           :value="text"
           placeholder="one word or phrase per line..."
           spellcheck="false"
           @input="onText"
         />
+        <template v-else>
+          <form class="pe-add" @submit.prevent="addWord">
+            <input v-model="newWord" class="pe-add-input" maxlength="40" placeholder="add a word and press enter" />
+            <button type="submit" class="pe-link" :disabled="!newWord.trim()">add</button>
+          </form>
+          <div class="pe-grid" :style="{ '--cols': columns }">
+            <div v-for="(w, i) in selected.words" :key="w + i" class="pe-cell">
+              <input class="pe-cell-input" :value="w" maxlength="40" spellcheck="false" @change="onCell(i, $event)" />
+              <button class="pe-cell-x" title="remove" @click="removeWord(i)">&times;</button>
+            </div>
+          </div>
+        </template>
         <div class="pe-meta">
           {{ wordCount }} word{{ wordCount === 1 ? '' : 's' }}
           <span v-if="dupes > 0" class="pe-warn"> · {{ dupes }} duplicate/blank</span>
@@ -247,13 +342,14 @@ async function shareId() {
       </template>
 
       <div v-else class="pe-blank">
-        <div>create a word pack, or import a folder of word lists</div>
+        <div>clone the official pack to start from, make a blank one, or import a folder of word lists</div>
         <div class="pe-help">
           .txt (one word per line), .csv (first column) and .json ({ "name", "words": [...] }) files are supported; every
           file in the folder becomes its own pack.
         </div>
         <div class="pe-actions">
-          <Btn size="small" :force-rotation="-1" @click="newPack">new pack</Btn>
+          <Btn size="small" color="green" :force-rotation="-1" :disabled="busy" @click="cloneOfficial">clone official pack</Btn>
+          <Btn size="small" :force-rotation="1" @click="newPack">new pack</Btn>
           <button class="pe-link" @click="dirInput.click()">import folder</button>
         </div>
       </div>

@@ -42,6 +42,7 @@ const props = defineProps({
   gameId: { type: String, required: true },
   summaryUrl: String,
   connectedUsername: String,
+  spectateOnLoad: { type: Boolean, default: false },
 });
 
 const router = useRouter();
@@ -520,6 +521,7 @@ onMounted(async () => {
   if (g !== undefined) {
     game.value = g;
     if (!isGameEnded(g) && socket === undefined && g.users[userId.value] != null) connect(Conn.AutoConnectingAsExistingUser);
+    else if (props.spectateOnLoad && !isGameEnded(g) && socket === undefined) spectate();
   } else {
     nav.joinError = { status: JoinStatus.Nonexistent, gameId: gameId.value };
     router.replace({ name: 'Home' });

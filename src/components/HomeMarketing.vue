@@ -1,31 +1,47 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 
+// a cute maple leaf: a hand-placed polygon, rounded off with Chaikin corner cutting so every edge is smooth
+const HALF = [
+  [96, 6],
+  [110, 50],
+  [144, 26],
+  [128, 78],
+  [186, 82],
+  [148, 120],
+  [160, 148],
+  [108, 130],
+  [96, 142],
+];
+function smoothLeaf() {
+  let pts = [...HALF, ...HALF.slice(1, -1).reverse().map(([x, y]) => [192 - x, y])];
+  for (let k = 0; k < 3; k++) {
+    const next = [];
+    for (let i = 0; i < pts.length; i++) {
+      const [ax, ay] = pts[i];
+      const [bx, by] = pts[(i + 1) % pts.length];
+      next.push([0.75 * ax + 0.25 * bx, 0.75 * ay + 0.25 * by], [0.25 * ax + 0.75 * bx, 0.25 * ay + 0.75 * by]);
+    }
+    pts = next;
+  }
+  return 'M' + pts.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join('L') + 'Z';
+}
+
 // [delay before drawing (ms), draw duration (ms)] per stroke
 const TIMINGS = [
-  [400, 400],
-  [100, 1200],
-  [100, 500],
-  [100, 300],
-  [50, 300],
-  [500, 1400],
-  [100, 300],
-  [100, 500],
-  [100, 200],
-  [100, 200],
+  [200, 900],
+  [60, 260],
+  [60, 120],
+  [30, 120],
+  [40, 200],
 ];
-// two crossed pencils, one path per stroke (the order they are drawn in)
+// the leaf outline, its stem, then a smiling face
 const STROKES = [
-  'M7.4 8.5L19.1 33.1L98.8 112.7',
-  'M7.8 8.3L33.8 19.4L112.9 98.7',
-  'M19.7 33.1L33.3 19.6',
-  'M97.3 113.5L114.3 97L123 105.9L105.1 122.5Z',
-  'M108.2 120.6L120.6 133.2L133.6 120.9L120.3 107.5',
-  'M185.4 7.8L173.3 33.2L94.4 112.4',
-  'M185.5 8.1L159.8 19.8L79.8 98.2',
-  'M173.8 33.5L159.5 18.9',
-  'M96.4 113.5L78.8 96.9L70.7 106.1L87.5 122.1Z',
-  'M85.2 120.2L72.4 133L59.7 120.5L72.7 107.4',
+  smoothLeaf(),
+  'M96 138C96 150 95 160 93 170',
+  'M80 88L80.2 88',
+  'M112 88L112.2 88',
+  'M85 100Q96 112 107 100',
 ];
 const paths = STROKES.map(() => ref());
 const shown = ref(-1);
@@ -35,14 +51,14 @@ onMounted(() => {
   TIMINGS.forEach(([delay, dur], i) => {
     const el = paths[i].value;
     t += delay;
-    el.style.transition = `stroke-dashoffset ${dur > 1000 ? 'cubic-bezier(0.515, 0.335, 0.505, 0.8)' : 'ease'} ${dur / 1000}s`;
+    el.style.transition = `stroke-dashoffset ${dur > 500 ? 'cubic-bezier(0.515, 0.335, 0.505, 0.8)' : 'ease'} ${dur / 1000}s`;
     setTimeout(() => el.setAttribute('stroke-dashoffset', '0'), t);
     t += dur;
   });
-  setTimeout(() => (shown.value = 0), 1700);
-  setTimeout(() => (shown.value = 1), 3200);
-  setTimeout(() => (shown.value = 2), 5800);
-  setTimeout(() => (shown.value = 3), 7000);
+  setTimeout(() => (shown.value = 0), 900);
+  setTimeout(() => (shown.value = 1), 1700);
+  setTimeout(() => (shown.value = 2), 2500);
+  setTimeout(() => (shown.value = 3), 3300);
 });
 </script>
 
@@ -65,17 +81,17 @@ onMounted(() => {
         />
       </svg>
       <div class="hm-guess hm-guess1" :class="{ show: shown >= 0 }">
-        <div class="hm-guess-inner"><span class="hm-guess-icon" />sean guessed <span class="hm-wrong">sword</span></div>
+        <div class="hm-guess-inner"><span class="hm-guess-icon" />ivan_qmap guessed <span class="hm-wrong">taiwan</span></div>
       </div>
       <div class="hm-guess hm-guess2" :class="{ show: shown >= 1 }">
-        <div class="hm-guess-inner"><span class="hm-guess-icon" />yiwen guessed <span class="hm-wrong">pencil</span></div>
+        <div class="hm-guess-inner"><span class="hm-guess-icon" />aquavision guessed <span class="hm-wrong">ganada</span></div>
       </div>
       <div class="hm-guess hm-guess3" :class="{ show: shown >= 2 }">
-        <div class="hm-guess-inner"><span class="hm-guess-icon" />rajeev guessed <span class="hm-wrong">swordfight</span></div>
+        <div class="hm-guess-inner"><span class="hm-guess-icon" />daniel guessed <span class="hm-wrong">51st state</span></div>
       </div>
       <div class="hm-guess hm-guess4" :class="{ show: shown >= 3 }">
         <div class="hm-guess-inner">
-          <span class="hm-guess-icon right" />rita guessed <span class="hm-right">draw battle!</span>
+          <span class="hm-guess-icon right" />gavania guessed <span class="hm-right">canada</span>
         </div>
       </div>
     </div>

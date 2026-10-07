@@ -9,36 +9,45 @@ const props = defineProps({
 });
 const emit = defineEmits(['update', 'close-modal']);
 
-const opts = (list, unit = '') => list.map((v) => ({ v, t: `${v}${unit}` }));
+// number rules: [min, max] are enforced here and again on the server; `zero` explains what 0 does
+const num = (key, label, min, max, unit = '', zero) => ({ key, label, num: true, min, max, unit, zero });
 
-// every customisable rule: key, label, kind and options
+// every customisable rule: key, label and kind
 const GROUPS = [
   {
     title: 'timing',
     items: [
-      { key: 'chooseWordSec', label: 'time to choose a word', options: opts([5, 10, 15, 20, 30, 45, 60], 's') },
-      { key: 'drawingCountdownSec', label: 'countdown before drawing', options: opts([1, 2, 3, 5, 8, 10], 's') },
-      { key: 'roundEndSec', label: 'result screen length', options: opts([3, 5, 8, 10, 15], 's') },
-      { key: 'startCountdownSec', label: 'game start countdown', options: opts([3, 5, 8, 10, 15], 's') },
-      { key: 'finalWordDelaySec', label: 'final round: pause between words', options: opts([1, 2, 3, 5], 's') },
+      num('chooseWordSec', 'time to choose a word', 3, 120, 'sec'),
+      num('drawingCountdownSec', 'countdown before drawing', 1, 15, 'sec'),
+      num('roundEndSec', 'result screen length', 2, 20, 'sec'),
+      num('startCountdownSec', 'game start countdown', 3, 20, 'sec'),
+      num('finalWordDelaySec', 'final round: pause between words', 1, 10, 'sec'),
     ],
   },
   {
     title: 'scoring',
     items: [
-      { key: 'pointsWin', label: 'points for guessing first', options: opts([100, 150, 200, 300, 500]) },
-      { key: 'pointsCorrect', label: 'points for guessing second', options: opts([0, 50, 100, 150, 200]) },
-      { key: 'finalWordPoints', label: 'final round: points per word', options: opts([50, 100, 150, 200, 300]) },
-      { key: 'finalBonusPoints', label: 'final round: finishing bonus', options: opts([0, 100, 200, 300, 500]) },
-      { key: 'headStartBase', label: 'head start after 2 wins in a row', options: [{ v: 0, t: 'off' }, ...opts([2, 3, 5, 8, 10], 's')] },
-      { key: 'headStartStep', label: 'extra head start per extra win', options: opts([0, 1, 2, 3, 5], 's') },
+      num('pointsWin', 'points for guessing first', 0, 10000, 'pts'),
+      num('pointsCorrect', 'points for guessing second', 0, 10000, 'pts'),
+      num('finalWordPoints', 'final round: points per word', 0, 10000, 'pts'),
+      num('finalBonusPoints', 'final round: finishing bonus', 0, 10000, 'pts'),
+      num('headStartBase', 'head start after 2 wins in a row', 0, 30, 'sec', 'off'),
+      num('headStartStep', 'extra head start per extra win', 0, 10, 'sec'),
       { key: 'alwaysRotate', label: 'drawers always rotate (winner does not stay)', bool: true },
     ],
   },
   {
     title: 'drawing',
     items: [
-      { key: 'palette', label: 'colour palette', options: [{ v: 'full', t: 'full (10)' }, { v: 'basic', t: 'basic (5)' }, { v: 'mono', t: 'greys only' }] },
+      {
+        key: 'palette',
+        label: 'colour palette',
+        options: [
+          { v: 'full', t: 'full (10)' },
+          { v: 'basic', t: 'basic (5)' },
+          { v: 'mono', t: 'greys only' },
+        ],
+      },
       { key: 'allowEraser', label: 'allow the eraser', bool: true },
       { key: 'allowClear', label: 'allow clearing the canvas', bool: true },
     ],
@@ -46,17 +55,17 @@ const GROUPS = [
   {
     title: 'guessing',
     items: [
-      { key: 'wordChoiceCount', label: 'words to choose from', options: opts([2, 3, 4]) },
-      { key: 'hintIntervalSec', label: 'reveal a letter every', options: [{ v: 0, t: 'never' }, ...opts([5, 10, 15, 20, 30], 's')] },
+      num('wordChoiceCount', 'words to choose from', 2, 4),
+      num('hintIntervalSec', 'reveal a letter every', 0, 120, 'sec', 'never'),
       { key: 'fuzzyMatch', label: 'forgive one typo (6+ letter words)', bool: true },
       { key: 'singleWordsOnly', label: 'only single-word answers', bool: true },
-      { key: 'maxWordLength', label: 'longest word allowed', options: [{ v: 0, t: 'any' }, ...opts([6, 8, 10, 12, 15], ' letters')] },
+      num('maxWordLength', 'longest word allowed', 0, 40, 'letters', 'any'),
     ],
   },
   {
     title: 'players',
     items: [
-      { key: 'maxTeamSize', label: 'max players per team', options: opts([2, 3, 4, 5, 6, 8]) },
+      num('maxTeamSize', 'max players per team', 2, 8),
       { key: 'allowSpectators', label: 'allow spectators', bool: true },
       { key: 'allowLateJoin', label: 'allow joining after the game starts', bool: true },
     ],
@@ -98,10 +107,17 @@ function applyPreset(p) {
   Object.assign(local, DEFAULT_RULES, p.values);
   push();
 }
-function numFrom(e, item) {
+function selectFrom(e, item) {
   const raw = e.target.value;
   const opt = item.options.find((o) => String(o.v) === raw);
   set(item.key, opt ? opt.v : raw);
+}
+// whole numbers only, clamped into the rule's range; a bad entry snaps back to the current value
+function numFrom(e, item) {
+  const n = Math.round(Number(e.target.value));
+  const v = e.target.value.trim() === '' || !Number.isFinite(n) ? local[item.key] : Math.min(item.max, Math.max(item.min, n));
+  e.target.value = v;
+  set(item.key, v);
 }
 </script>
 
@@ -127,13 +143,29 @@ function numFrom(e, item) {
             :disabled="disabled"
             @change="set(item.key, $event.target.checked)"
           />
+          <span v-else-if="item.num" class="rm-num-wrap">
+            <input
+              :id="'rule-' + item.key"
+              class="rm-num"
+              type="number"
+              inputmode="numeric"
+              step="1"
+              :min="item.min"
+              :max="item.max"
+              :value="local[item.key]"
+              :disabled="disabled"
+              @change="numFrom($event, item)"
+              @keydown.enter.prevent="$event.target.blur()"
+            />
+            <span class="rm-unit">{{ local[item.key] === 0 && item.zero ? item.zero : item.unit }}</span>
+          </span>
           <select
             v-else
             :id="'rule-' + item.key"
             class="rm-select"
             :value="local[item.key]"
             :disabled="disabled"
-            @change="numFrom($event, item)"
+            @change="selectFrom($event, item)"
           >
             <option v-for="o in item.options" :key="o.v" :value="o.v">{{ o.t }}</option>
           </select>

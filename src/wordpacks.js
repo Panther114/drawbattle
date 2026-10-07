@@ -2,14 +2,12 @@ import { reactive, ref } from 'vue';
 
 export const API = '/api';
 
+// the one official pack
 export const DEFAULT_WORD_LIST_ID = 110943;
-// the standard pack, plus the pack for the current year's special edition
-export const SPECIAL_WORD_LIST_ID = 775386;
 
-// id -> metadata ({ id, name, numWords, sampleWords, description?, authorName? })
+// id -> metadata ({ id, name, numWords, sampleWords, description? })
 export const packs = reactive({});
 export const officialIds = ref([]);
-export const communityIds = ref(undefined);
 const inflight = {};
 
 export async function loadOfficialPacks() {
@@ -37,18 +35,13 @@ export async function loadPack(id) {
   }
 }
 
-export async function loadCommunityPacks() {
-  if (communityIds.value !== undefined) return;
-  const res = await fetch(`${API}/wordlists?type=community`, { method: 'GET' });
-  if (res.status === 200) {
-    const list = await res.json();
-    list.forEach((p) => {
-      packs[p.id] = p;
-    });
-    communityIds.value = list.map((p) => p.id);
-  }
+// the full word list of the official pack, for cloning it in the editor
+export async function fetchOfficialWords(id = DEFAULT_WORD_LIST_ID) {
+  const res = await fetch(`${API}/wordlists/${id}/words`);
+  if (res.status !== 200) throw new Error('could not load the official word pack');
+  return res.json();
 }
 
 export function isStandardPack(id) {
-  return id === DEFAULT_WORD_LIST_ID || id === SPECIAL_WORD_LIST_ID;
+  return id === DEFAULT_WORD_LIST_ID;
 }

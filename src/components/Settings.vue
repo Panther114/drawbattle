@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
 import { C } from '../shared.js';
-import { SPECIAL_WORD_LIST_ID, isStandardPack, loadPack, packs } from '../wordpacks.js';
+import { DEFAULT_WORD_LIST_ID, isStandardPack, loadPack, packs } from '../wordpacks.js';
 import { track } from '../analytics.js';
 import { safeStorage } from '../storage.js';
 import WordListSelectorItem from './WordListSelectorItem.vue';
@@ -16,8 +16,8 @@ const props = defineProps({
 });
 const emit = defineEmits(['client-message']);
 
-const ROUND_OPTIONS = [4, 6, 8, 10, 12, 15, 20, 25, 30, 40];
-const ROUND_LENGTH_OPTIONS = [10, 15, 20, 30, 45, 60, 75, 90, 105, 120, 150, 180, 240, 300];
+const MAX_ROUNDS = 200;
+const MAX_ROUND_LENGTH = 600;
 
 const storage = safeStorage('local');
 const numRounds = ref(props.gameSettings.numRounds);
@@ -37,21 +37,35 @@ const customPack = ref(isStandardPack(initialPack) ? undefined : initialPack);
 
 const inviteLink = computed(() => `${window.location.host}/${props.gameId.toUpperCase()}`);
 const pack = computed(() => packs[wordListId.value]);
-const roundOptions = computed(() =>
-  ROUND_OPTIONS.filter((n) => pack.value === undefined || n <= pack.value.numWords / 2),
-);
+// every round uses 2 words, so the pack size caps the round count
+const maxRounds = computed(() => Math.min(MAX_ROUNDS, pack.value === undefined ? MAX_ROUNDS : Math.floor(pack.value.numWords / 2)));
+
+function clampInt(raw, lo, hi, fallback) {
+  const n = Math.round(Number(raw));
+  return String(raw).trim() === '' || !Number.isFinite(n) ? fallback : Math.min(hi, Math.max(lo, n));
+}
 
 const send = (settings) => emit('client-message', [C.UpdateSettings, settings]);
-const current = () => props.gameSettings;
+// the server's settings overlaid with the local copies, so quick successive edits don't overwrite each other
+const current = () => ({
+  ...props.gameSettings,
+  numRounds: numRounds.value,
+  roundLengthSec: roundLengthSec.value,
+  wordListId: wordListId.value,
+  hideWordLength: !showWordLength.value,
+  streamerMode: streamerMode.value,
+});
 
 function changeRounds(e) {
-  const v = parseInt(e.target.value);
+  const v = clampInt(e.target.value, 1, maxRounds.value, numRounds.value);
+  e.target.value = v;
   track('change game setting', { 'game id': props.gameId, key: 'numRounds', value: v });
   numRounds.value = v;
   send({ ...current(), numRounds: v });
 }
 function changeLength(e) {
-  const v = parseInt(e.target.value);
+  const v = clampInt(e.target.value, 5, MAX_ROUND_LENGTH, roundLengthSec.value);
+  e.target.value = v;
   track('change game setting', { 'game id': props.gameId, key: 'roundLengthSec', value: v });
   roundLengthSec.value = v;
   send({ ...current(), roundLengthSec: v });
@@ -113,14 +127,13 @@ watch(
     streamerMode.value = s.streamerMode;
   },
 );
-// pick a legal round count whenever the pack changes
+// keep the round count legal whenever the pack changes
 watch(
-  [roundOptions, numRounds],
+  [maxRounds, numRounds],
   () => {
-    if (roundOptions.value.length > 0 && !roundOptions.value.includes(numRounds.value)) {
-      const v = Math.max(...roundOptions.value);
-      numRounds.value = v;
-      send({ ...current(), numRounds: v });
+    if (maxRounds.value >= 1 && numRounds.value > maxRounds.value && !props.disabled) {
+      numRounds.value = maxRounds.value;
+      send({ ...current(), numRounds: maxRounds.value });
     }
   },
   { immediate: true },
@@ -131,7 +144,7 @@ watch(wordListId, (id) => {
 });
 
 const listIds = computed(() => {
-  const ids = [110943, SPECIAL_WORD_LIST_ID];
+  const ids = [DEFAULT_WORD_LIST_ID];
   if (customPack.value !== undefined) ids.unshift(customPack.value);
   return ids;
 });
@@ -184,17 +197,35 @@ const listIds = computed(() => {
       <div class="st-row-label">settings</div>
       <div class="st-row-body">
         <div>
-          <div v-if="roundOptions.length > 0" class="st-item">
-            <select class="st-select" :value="numRounds" :disabled="disabled" @change="changeRounds">
-              <option v-for="n in roundOptions" :key="n" :value="n">{{ n }}</option>
-            </select>
+          <div v-if="maxRounds >= 1" class="st-item">
+            <input
+              class="st-number"
+              type="number"
+              inputmode="numeric"
+              step="1"
+              min="1"
+              :max="maxRounds"
+              :value="numRounds"
+              :disabled="disabled"
+              @change="changeRounds"
+              @keydown.enter.prevent="$event.target.blur()"
+            />
             <div>rounds + the final drawdown</div>
           </div>
           <div v-else class="st-item st-not-enough-words">word pack needs more words!</div>
           <div class="st-item">
-            <select class="st-select" :value="roundLengthSec" :disabled="disabled" @change="changeLength">
-              <option v-for="n in ROUND_LENGTH_OPTIONS" :key="n" :value="n">{{ n }}</option>
-            </select>
+            <input
+              class="st-number"
+              type="number"
+              inputmode="numeric"
+              step="1"
+              min="5"
+              :max="MAX_ROUND_LENGTH"
+              :value="roundLengthSec"
+              :disabled="disabled"
+              @change="changeLength"
+              @keydown.enter.prevent="$event.target.blur()"
+            />
             <div>seconds per round</div>
           </div>
           <div class="st-item">

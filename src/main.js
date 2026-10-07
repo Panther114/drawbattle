@@ -6,42 +6,22 @@ import Game from './views/Game.vue';
 import Terms from './views/Terms.vue';
 import Debug from './views/Debug.vue';
 import WordPacks from './views/WordPacks.vue';
+import Lobbies from './views/Lobbies.vue';
 import { tooltip } from './tooltip.js';
 import { loadOfficialPacks } from './wordpacks.js';
 import './style.css';
-
-const LIST_ALIASES = { hades: 198903, taiwan: 170398, holidays: 332670, 2020: 796082 };
-
-// vanity URLs that open the home page with a word pack preselected
-const packRoutes = [
-  ['/pokemon', 138239],
-  ['/election2020', 252520],
-  ['/taiwan', 170398],
-  ['/lunarnewyear', 178976],
-].map(([path, id]) => ({
-  path,
-  component: Home,
-  props: (route) => ({ ...route.params, wordListId: String(id) }),
-}));
 
 const routes = [
   {
     path: '/',
     name: 'Home',
     component: Home,
-    props: (route) => {
-      const q = { ...route.query };
-      if (typeof q.list === 'string' && LIST_ALIASES[q.list] !== undefined) {
-        q.wordListId = `${LIST_ALIASES[q.list]}`;
-        delete q.list;
-      }
-      return { ...q, ...route.params };
-    },
+    props: (route) => ({ ...route.query, ...route.params }),
   },
-  ...packRoutes,
   { path: '/terms', name: 'Terms of Service', component: Terms },
   { path: '/debug', name: 'Debug', component: Debug },
   { path: '/wordpacks', name: 'WordPacks', component: WordPacks },
+  { path: '/lobbies', name: 'Lobbies', component: Lobbies },
   { path: '/wordpack/:wordListId(\\d+)', name: 'Wordpack', component: Home, props: true },
   {
     path: '/:gameId([a-zA-Z]{4})',
@@ -51,6 +31,7 @@ const routes = [
     props: (route) => ({
       connectedUsername: route.query.connectedUsername,
       summaryUrl: route.query.summaryUrl,
+      spectateOnLoad: route.query.spectate === '1',
       ...route.params,
     }),
   },

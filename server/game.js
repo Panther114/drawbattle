@@ -71,6 +71,7 @@ const RULE_RANGES = {
   maxTeamSize: [2, 8],
   maxWordLength: [0, 40],
 };
+export const SETTING_RANGES = { numRounds: [1, 200], roundLengthSec: [5, 600] };
 export const START_COUNTDOWN_SEC = 5;
 export const CHOOSE_WORD_SEC = 15;
 export const DRAWING_COUNTDOWN_SEC = 3;
@@ -275,6 +276,38 @@ export class Game {
     return out;
   }
 
+  // compact public description for the lobbies list
+  lobbyInfo() {
+    const names = (t) => t.userIds.map((id) => this.users[id]).filter(Boolean);
+    const players = this.teams.flatMap((t, ti) =>
+      names(t).map((u) => ({ name: u.name || 'anonymous', team: ti, connected: u.status !== Status.Disconnected })),
+    );
+    const maxTeam = this.rule('maxTeamSize');
+    const capacity = maxTeam * this.teams.length;
+    let stage = 'lobby';
+    let round = 0;
+    if (this.finished) stage = 'ended';
+    else if (this.finalRound) stage = 'final';
+    else if (this.currentRound) {
+      round = this.previousRounds.length + 1;
+      stage = this.inCountdown ? 'starting' : 'playing';
+    }
+    const started = stage === 'playing' || stage === 'final' || stage === 'ended';
+    return {
+      id: this.id,
+      players,
+      teamNames: this.teams.map((t) => t.name),
+      capacity,
+      stage,
+      round,
+      numRounds: this.settings.numRounds,
+      full: this.teams.every((t) => t.userIds.length >= maxTeam),
+      canJoin: !started && stage !== 'starting' && !this.teams.every((t) => t.userIds.length >= maxTeam),
+      canSpectate: this.rule('allowSpectators'),
+      spectators: this.spectators.size,
+    };
+  }
+
   // ---------- sending ----------
   send(ws, msg) {
     if (ws.readyState === 1) ws.send(JSON.stringify(msg));
@@ -441,7 +474,12 @@ export class Game {
   onUpdateSettings(userId, settings) {
     if (this.started) return;
     if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return;
-    this.settings = settings;
+    const next = { ...settings };
+    for (const [k, [lo, hi]] of Object.entries(SETTING_RANGES)) {
+      const v = Math.round(Number(next[k]));
+      next[k] = Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : this.settings[k];
+    }
+    this.settings = next;
     this.broadcast([S.UpdateSettings, this.settings]);
   }
 
@@ -458,7 +496,7 @@ export class Game {
     const maxLen = this.rule('maxWordLength');
     const single = this.rule('singleWordsOnly');
     if (!maxLen && !single) return all;
-    const filtered = all.filter((w) => (!single || !/s/.test(w)) && (!maxLen || w.length <= maxLen));
+    const filtered = all.filter((w) => (!single || !/\s/.test(w)) && (!maxLen || w.length <= maxLen));
     return filtered.length >= 2 * this.settings.numRounds + 4 ? filtered : all;
   }
 

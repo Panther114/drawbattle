@@ -1,6 +1,6 @@
 <script setup>
-import { nextTick, onMounted, ref } from 'vue';
-import { communityIds, loadCommunityPacks, loadPack, officialIds, packs } from '../wordpacks.js';
+import { nextTick, ref } from 'vue';
+import { loadPack, officialIds, packs } from '../wordpacks.js';
 import { track } from '../analytics.js';
 import Modal from './Modal.vue';
 import WordPackEditor from './WordPackEditor.vue';
@@ -34,9 +34,6 @@ async function submitCustom(e) {
   else customError.value = 'word list not found';
 }
 
-onMounted(() => {
-  void loadCommunityPacks();
-});
 function clickTab(name) {
   tab.value = name;
   track('click word pack modal tab', { 'game id': props.gameId, tab: name });
@@ -48,11 +45,7 @@ function clickTab(name) {
     <div class="wp-modal">
       <div class="wp-tabs">
         <button class="wp-tab" :class="{ selected: tab === 'official' }" @click="clickTab('official')">
-          official packs
-        </button>
-        <button class="wp-tab" :class="{ selected: tab === 'community' }" @click="clickTab('community')">
-          community packs
-          <div class="wp-tab-new">new!</div>
+          official pack
         </button>
         <button class="wp-tab" :class="{ selected: tab === 'mine' }" @click="clickTab('mine')">my packs</button>
       </div>
@@ -60,9 +53,6 @@ function clickTab(name) {
         <template v-for="id in officialIds" :key="id">
           <WordListSelectorItem v-if="packs[id] !== undefined" :word-list-id="id" @select-list="emit('select-list', id)" />
         </template>
-      </div>
-      <WordPackEditor v-else-if="tab === 'mine'" :game-id="gameId" @use="(id) => emit('select-list', id)" />
-      <div v-else>
         <div class="wp-custom-text">
           <div class="wp-custom">
             <div v-if="entering">
@@ -76,15 +66,8 @@ function clickTab(name) {
             <button v-else class="wp-custom-button" @click="openCustom">enter a custom word pack id</button>
           </div>
         </div>
-        <div v-if="communityIds !== undefined">
-          <WordListSelectorItem
-            v-for="id in communityIds"
-            :key="id"
-            :word-list-id="id"
-            @select-list="emit('select-list', id)"
-          />
-        </div>
       </div>
+      <WordPackEditor v-else :game-id="gameId" @use="(id) => emit('select-list', id)" />
     </div>
   </Modal>
 </template>
