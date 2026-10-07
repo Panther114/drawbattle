@@ -108,8 +108,9 @@ async function joinGame() {
 <template>
   <div class="hm-root">
     <div v-if="errorFromGame" class="hm-join-error-from-game">{{ errorText(errorFromGame.status, errorFromGame.gameId, errorFromGame.reason) }}</div>
-    <div class="hm-title">draw battle!</div>
-    <div class="hm-edition">Gavania edition</div>
+    <div class="hm-title">
+      <span class="hm-title-text">draw battle!<span class="hm-edition">Gavania edition</span></span>
+    </div>
     <div class="hm-tagline">two teams of drawers face off with a frantic final round</div>
     <HomeWordPackUnit v-if="listId !== undefined" :word-list="list" />
     <HomeMarketing v-else class="hm-marketing-pos" />

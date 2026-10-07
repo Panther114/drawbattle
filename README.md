@@ -42,7 +42,7 @@ aren't full can be joined directly, and any game that allows spectators has a **
 
 There is one official word pack. Open the **word pack editor** on the home page (`/wordpacks`) or the **my packs** tab of the
 word pack window in a lobby. **clone official pack** copies the official words into your own pack to use as a base.
-Packs live in your browser (localStorage). You can create and edit packs, show 1-5 words per row, clean up / sort / shuffle,
+Packs live in your browser (localStorage). You can create and edit packs, show 1-5 words per row (side-by-side text columns), clean up / sort / shuffle,
 import single files or a **whole folder** (each `.txt`, `.csv` or `.json` file becomes a pack), and export as `.json` / `.txt`.
 **use in this game** uploads the pack to the server (kept in memory for 24 h, max 3000 words) and selects it for the
 lobby; **get a shareable id** gives a 6-digit id anyone can enter under *browse all packs → enter a custom word pack id*.

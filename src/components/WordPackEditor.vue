@@ -28,32 +28,33 @@ const importPreview = ref();
 const fileInput = ref();
 const COLUMN_CHOICES = [1, 2, 3, 4, 5];
 const prefs = safeStorage('local');
-// words per row: 1 = plain text box, 2-5 = a grid of editable words
+// words per row: 1 = one text box, 2-5 = side-by-side text columns (each one is a plain, arrow-key friendly text box)
 const columns = ref(Math.min(5, Math.max(1, parseInt(prefs?.getItem('dbEditorCols') || '1', 10) || 1)));
-const newWord = ref('');
+const colTexts = ref([]); // multi-column mode: the text of each column
 const dirInput = ref();
 
-const lines = computed(() => text.value.split('\n'));
-const wordCount = computed(() =>
-  columns.value > 1 && selected.value ? selected.value.words.length : cleanWords(lines.value).length,
+const lines = computed(() =>
+  columns.value > 1 ? colTexts.value.flatMap((t) => t.split('\n')) : text.value.split('\n'),
 );
-const dupes = computed(() =>
-  columns.value > 1 ? 0 : lines.value.map((l) => l.trim()).filter(Boolean).length - wordCount.value,
-);
+const wordCount = computed(() => cleanWords(lines.value).length);
+const dupes = computed(() => lines.value.map((l) => l.trim()).filter(Boolean).length - wordCount.value);
+// every column is as tall as the longest one, so the whole block scrolls together
+const colRows = computed(() => Math.max(8, ...colTexts.value.map((t) => t.split('\n').length)) + 1);
 
-watch(
-  selected,
-  (p) => {
-    text.value = p ? p.words.join('\n') : '';
-  },
-  { immediate: true },
-);
+// fill the text box / columns from the pack's words (words run down the first column, then the next...)
+function refresh() {
+  const words = selected.value ? selected.value.words : [];
+  text.value = words.join('\n');
+  const per = Math.max(1, Math.ceil(words.length / columns.value));
+  colTexts.value = Array.from({ length: columns.value }, (_, i) => words.slice(i * per, (i + 1) * per).join('\n'));
+}
+
+watch(selected, refresh, { immediate: true });
 
 function setColumns(n) {
   if (n === columns.value) return;
-  // leaving the grid: refresh the text box from the (possibly edited) words
-  if (columns.value > 1 && n === 1 && selected.value) text.value = selected.value.words.join('\n');
   columns.value = n;
+  refresh();
   try {
     prefs?.setItem('dbEditorCols', String(n));
   } catch {
@@ -66,44 +67,43 @@ function say(msg, kind = 'info') {
   statusKind.value = kind;
 }
 
-// write the textarea back into the pack (cleaned)
+// write the text back into the pack (cleaned)
 function commit() {
   const p = selected.value;
   if (!p) return;
-  p.words = cleanWords(columns.value > 1 ? p.words : lines.value);
+  p.words = cleanWords(lines.value);
   savePacks();
 }
-const currentWords = () => cleanWords(columns.value > 1 && selected.value ? selected.value.words : lines.value);
 function onText(e) {
   text.value = e.target.value;
-  const p = selected.value;
-  if (p) {
-    p.words = cleanWords(lines.value);
-    savePacks();
-  }
+  commit();
+}
+function onCol(i, e) {
+  colTexts.value[i] = e.target.value;
+  commit();
 }
 function tidy() {
   if (!selected.value) return;
   commit();
-  text.value = selected.value.words.join('\n');
+  refresh();
   say('removed blanks and duplicates');
 }
 function sortWords() {
   if (!selected.value) return;
-  selected.value.words = currentWords().sort((a, b) => a.localeCompare(b));
-  text.value = selected.value.words.join('\n');
+  selected.value.words = cleanWords(lines.value).sort((a, b) => a.localeCompare(b));
   savePacks();
+  refresh();
 }
 function shuffleWords() {
   if (!selected.value) return;
-  const a = currentWords();
+  const a = cleanWords(lines.value);
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   selected.value.words = a;
-  text.value = a.join('\n');
   savePacks();
+  refresh();
 }
 function newPack() {
   const p = createPack({ name: 'new word pack' });
@@ -115,35 +115,6 @@ function remove() {
   deletePack(p);
   selectedUid.value = localPacks[0]?.uid;
 }
-// grid editing: changes go straight into the pack's word list
-function onCell(i, e) {
-  const p = selected.value;
-  if (!p) return;
-  const w = e.target.value.trim().replace(/\s+/g, ' ').slice(0, 40);
-  const dup = p.words.some((x, j) => j !== i && x.toLowerCase() === w.toLowerCase());
-  if (!w || dup) p.words.splice(i, 1);
-  else p.words[i] = w;
-  savePacks();
-}
-function removeWord(i) {
-  const p = selected.value;
-  if (!p) return;
-  p.words.splice(i, 1);
-  savePacks();
-}
-function addWord() {
-  const p = selected.value;
-  const w = newWord.value.trim().replace(/\s+/g, ' ').slice(0, 40);
-  newWord.value = '';
-  if (!p || !w) return;
-  if (p.words.some((x) => x.toLowerCase() === w.toLowerCase())) {
-    say(`"${w}" is already in the pack`, 'error');
-    return;
-  }
-  p.words.unshift(w);
-  savePacks();
-}
-
 // ---- cloning the official pack ----
 async function cloneOfficial() {
   busy.value = true;
@@ -302,18 +273,18 @@ async function shareId() {
           spellcheck="false"
           @input="onText"
         />
-        <template v-else>
-          <form class="pe-add" @submit.prevent="addWord">
-            <input v-model="newWord" class="pe-add-input" maxlength="40" placeholder="add a word and press enter" />
-            <button type="submit" class="pe-link" :disabled="!newWord.trim()">add</button>
-          </form>
-          <div class="pe-grid" :style="{ '--cols': columns }">
-            <div v-for="(w, i) in selected.words" :key="w + i" class="pe-cell">
-              <input class="pe-cell-input" :value="w" maxlength="40" spellcheck="false" @change="onCell(i, $event)" />
-              <button class="pe-cell-x" title="remove" @click="removeWord(i)">&times;</button>
-            </div>
-          </div>
-        </template>
+        <div v-else class="pe-columns" :style="{ '--cols': columns }">
+          <textarea
+            v-for="(t, i) in colTexts"
+            :key="i"
+            class="pe-col"
+            :value="t"
+            :rows="colRows"
+            wrap="off"
+            spellcheck="false"
+            @input="onCol(i, $event)"
+          />
+        </div>
         <div class="pe-meta">
           {{ wordCount }} word{{ wordCount === 1 ? '' : 's' }}
           <span v-if="dupes > 0" class="pe-warn"> · {{ dupes }} duplicate/blank</span>

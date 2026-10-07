@@ -3326,11 +3326,19 @@ a:hover {
 }
 
 /* ===== round 3: edition tag, code picker, lobbies, number inputs, editor grid ===== */
+.hm-title-text {
+  position: relative;
+  display: inline-block;
+}
 .hm-edition {
+  position: absolute;
+  left: 100%;
+  bottom: 6px;
+  margin-left: 8px;
+  white-space: nowrap;
   color: var(--gray);
   font-size: 14px;
-  margin-bottom: 6px;
-  transform: rotate(-2deg);
+  transform: rotate(-4deg);
   animation: hm-edition-in 0.6s 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
 }
 @keyframes hm-edition-in {
@@ -3657,79 +3665,39 @@ a:hover {
   background: var(--blue);
   border-color: var(--darkblue);
 }
-.pe-add {
+.pe-columns {
   display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.pe-add-input {
-  flex: 1;
-  min-width: 0;
-  font-size: 16px;
-  background: #ffffffb0;
-  border: 2px solid #80808040;
-  border-radius: 8px;
-  padding: 3px 8px;
-  outline: 0;
-}
-.pe-add-input:focus {
-  border-color: var(--darkblue);
-}
-.pe-grid {
-  display: grid;
-  grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
-  gap: 4px 8px;
   height: 230px;
   overflow-y: auto;
-  align-content: start;
   border: 3px solid silver;
   border-radius: 8px;
-  padding: 8px;
   background: #ffffffb0;
   resize: vertical;
 }
-.pe-cell {
-  display: flex;
-  align-items: center;
+.pe-col {
+  flex: 1 1 0;
   min-width: 0;
-  border-radius: 6px;
-  background: #87e0ff30;
-  transition: background 0.15s;
-}
-.pe-cell:hover,
-.pe-cell:focus-within {
-  background: #87e0ff80;
-}
-.pe-cell-input {
-  flex: 1;
-  min-width: 0;
-  background: transparent;
+  box-sizing: border-box;
   border: 0;
+  border-left: 1px solid #80808060;
+  background: transparent;
+  font-size: 17px;
+  line-height: 1.35;
+  padding: 8px;
+  resize: none;
+  overflow: hidden;
+  white-space: pre;
   outline: 0;
-  font-size: 15px;
-  padding: 2px 6px;
 }
-.pe-cell-x {
-  background: transparent;
-  border: 0;
-  color: var(--rorange);
-  cursor: pointer;
-  font-size: 18px;
-  line-height: 1;
-  padding: 0 6px;
-  opacity: 0;
-  transition: opacity 0.15s;
+.pe-col:first-child {
+  border-left: 0;
 }
-.pe-cell:hover .pe-cell-x,
-.pe-cell:focus-within .pe-cell-x {
-  opacity: 1;
+.pe-col:focus {
+  background: #87e0ff18;
 }
 @media (max-width: 700px) {
   .hm-extra-row {
     flex-direction: column;
     gap: 14px;
-  }
-  .pe-grid {
-    --cols: 2 !important;
   }
 }
