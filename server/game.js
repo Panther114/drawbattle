@@ -41,6 +41,36 @@ export const C = {
 export const Status = { Connected: 1, Disconnected: 2 };
 
 // timing constants (seconds) shared with the client
+export const DEFAULT_RULES = {
+  chooseWordSec: 15,
+  wordChoiceCount: 2,
+  startCountdownSec: 5,
+  drawingCountdownSec: 3,
+  roundEndSec: 5,
+  headStartBase: 3,
+  headStartStep: 1,
+  finalWordDelaySec: 2,
+  fuzzyMatch: false,
+  maxTeamSize: 8,
+  alwaysRotate: false,
+  allowSpectators: true,
+  allowLateJoin: true,
+  singleWordsOnly: false,
+  maxWordLength: 0,
+};
+// clamp numeric rules to sane ranges so a bad client cannot wedge a game
+const RULE_RANGES = {
+  chooseWordSec: [3, 120],
+  wordChoiceCount: [2, 4],
+  startCountdownSec: [3, 20],
+  drawingCountdownSec: [1, 15],
+  roundEndSec: [2, 20],
+  headStartBase: [0, 30],
+  headStartStep: [0, 10],
+  finalWordDelaySec: [1, 10],
+  maxTeamSize: [2, 8],
+  maxWordLength: [0, 40],
+};
 export const START_COUNTDOWN_SEC = 5;
 export const CHOOSE_WORD_SEC = 15;
 export const DRAWING_COUNTDOWN_SEC = 3;
@@ -72,20 +102,45 @@ export function normalizeGuess(s) {
     .toLowerCase()
     .replace(/[^\w一-鿿㐀-䶿가-힯ß]/g, '');
 }
-export function guessMatches(guess, word) {
-  return !!word && normalizeGuess(guess) === normalizeGuess(word);
+function withinOneEdit(a, b) {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i++;
+      j++;
+    } else {
+      if (++edits > 1) return false;
+      if (a.length > b.length) i++;
+      else if (a.length < b.length) j++;
+      else {
+        i++;
+        j++;
+      }
+    }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
 }
-export function findCorrectGuess(guesses, word) {
-  for (const g of guesses) if (guessMatches(g.guess, word)) return g;
+export function guessMatches(guess, word, fuzzy = false) {
+  if (!word) return false;
+  const g = normalizeGuess(guess);
+  const w = normalizeGuess(word);
+  if (g === w) return true;
+  return fuzzy && w.length >= 6 && g.length > 0 && withinOneEdit(g, w);
+}
+export function findCorrectGuess(guesses, word, fuzzy = false) {
+  for (const g of guesses) if (guessMatches(g.guess, word, fuzzy)) return g;
   return undefined;
 }
 
 // team index whose first correct guess came earliest
-export function roundWinner(round) {
+export function roundWinner(round, fuzzy = false) {
   let best;
   let bestTeam;
   round.teamStates.forEach((ts, i) => {
-    const g = findCorrectGuess(ts.guesses, round.word);
+    const g = findCorrectGuess(ts.guesses, round.word, fuzzy);
     if (g && (best === undefined || g.timestamp < best.timestamp)) {
       best = g;
       bestTeam = i;
@@ -141,6 +196,17 @@ export class Game {
   }
 
   // ---------- helpers ----------
+  rule(key) {
+    let v = this.settings ? this.settings[key] : undefined;
+    const d = DEFAULT_RULES[key];
+    if (typeof v !== typeof d || (typeof v === 'number' && !Number.isFinite(v))) return d;
+    const r = RULE_RANGES[key];
+    if (r) v = Math.min(r[1], Math.max(r[0], Math.round(v)));
+    return v;
+  }
+  get fz() {
+    return this.rule('fuzzyMatch');
+  }
   now() {
     return Date.now();
   }
@@ -226,6 +292,11 @@ export class Game {
   connect(ws, { userId, userName, spectate }) {
     this.touch();
     ws.gameCtx = { userId, spectate: !!spectate };
+    if (spectate && !this.rule('allowSpectators')) {
+      this.send(ws, [S.ServerError, { type: 'Closed', gameId: this.id, reason: 'spectators' }]);
+      ws.close(1000);
+      return;
+    }
     if (spectate) {
       this.spectators.add(ws);
       this.send(ws, [S.SessionStart, this.snapshot('current'), this.now()]);
@@ -247,6 +318,11 @@ export class Game {
       if (wasDisconnected || this.started) this.broadcast([S.UserReconnect, userId], ws);
       return;
     }
+    if (this.started && !this.rule('allowLateJoin')) {
+      this.send(ws, [S.ServerError, { type: 'Closed', gameId: this.id, reason: 'late' }]);
+      ws.close(1000);
+      return;
+    }
     if (userName === undefined) {
       // unknown user without a name: nothing to join as
       ws.close(1008, 'unknown user');
@@ -256,7 +332,7 @@ export class Game {
     const user = { id: userId, name: userName, status: Status.Connected };
     this.users[userId] = user;
     let ti = this.teams[0].userIds.length <= this.teams[1].userIds.length ? 0 : 1;
-    if (this.teams[ti].userIds.length >= MAX_TEAM_SIZE) ti = 1 - ti;
+    if (this.teams[ti].userIds.length >= this.rule('maxTeamSize')) ti = 1 - ti;
     this.teams[ti].userIds.push(userId);
     this.addSocket(userId, ws);
     this.broadcast([S.JoinGame, user, this.teams], ws);
@@ -349,7 +425,7 @@ export class Game {
     const cur = this.teamIndexOf(userId);
     for (const t of this.teams) t.userIds = t.userIds.filter((u) => u !== userId);
     if (Number.isInteger(teamIndex) && teamIndex >= 0 && teamIndex < this.teams.length) {
-      if (this.teams[teamIndex].userIds.length < MAX_TEAM_SIZE) this.teams[teamIndex].userIds.push(userId);
+      if (this.teams[teamIndex].userIds.length < this.rule('maxTeamSize')) this.teams[teamIndex].userIds.push(userId);
       else if (cur >= 0) this.teams[cur].userIds.push(userId);
     }
     this.broadcast([S.UpdateTeams, this.teams]);
@@ -376,16 +452,26 @@ export class Game {
     return true;
   }
 
+  // the pack's words after the single-word / length filters (ignored if too few words would remain)
+  wordPool() {
+    const all = getWords(this.settings.wordListId) || [];
+    const maxLen = this.rule('maxWordLength');
+    const single = this.rule('singleWordsOnly');
+    if (!maxLen && !single) return all;
+    const filtered = all.filter((w) => (!single || !/s/.test(w)) && (!maxLen || w.length <= maxLen));
+    return filtered.length >= 2 * this.settings.numRounds + 4 ? filtered : all;
+  }
+
   onStartGame() {
     if (!this.canStart()) return;
-    const words = getWords(this.settings.wordListId);
+    const words = this.wordPool();
     if (!words || words.length < 2 * this.settings.numRounds) return;
     this.availableWords = shuffle(words);
     this.usedWords = [];
     this.ready = new Set();
     const drawers = this.teams.map((t) => t.userIds[0]);
     const chooserTeam = Math.floor(Math.random() * this.teams.length);
-    this.startRound(0, drawers, drawers[chooserTeam], 0, this.now() + START_COUNTDOWN_SEC * 1000);
+    this.startRound(0, drawers, drawers[chooserTeam], 0, this.now() + this.rule('startCountdownSec') * 1000);
   }
 
   onCancelStart() {
@@ -401,7 +487,7 @@ export class Game {
     const out = [];
     while (out.length < n) {
       if (this.availableWords.length === 0) {
-        const words = getWords(this.settings.wordListId) || [];
+        const words = this.wordPool();
         this.availableWords = shuffle(words.filter((w) => !this.usedWords.includes(w)));
         if (this.availableWords.length === 0) this.availableWords = shuffle(words);
       }
@@ -413,7 +499,7 @@ export class Game {
   startRound(index, drawers, chooserId, headStartSec, startTime) {
     this.ready = new Set();
     this.chosenByTeam = -1;
-    const wordChoices = this.drawWords(2);
+    const wordChoices = this.drawWords(this.rule('wordChoiceCount'));
     const round = {
       wordChoices,
       chooserId,
@@ -435,7 +521,7 @@ export class Game {
   scheduleAutoChoose(index) {
     this.clearChooserTimer();
     const round = this.currentRound;
-    const at = round.startTime + CHOOSE_WORD_SEC * 1000;
+    const at = round.startTime + this.rule('chooseWordSec') * 1000;
     this.chooserTimer = setTimeout(
       () => {
         if (this.currentRound === round && this.previousRounds.length === index && round.word === undefined) {
@@ -484,7 +570,7 @@ export class Game {
       const g = { userId, guess, timestamp: ts };
       state.guesses.push(g);
       this.broadcast([S.UserGuess, [idx], ti, g]);
-      if (guessMatches(guess, fr.words[idx])) this.onFinalWordGuessed(ti, idx, ts);
+      if (guessMatches(guess, fr.words[idx], this.fz)) this.onFinalWordGuessed(ti, idx, ts);
       return;
     }
     const round = this.currentRound;
@@ -521,7 +607,7 @@ export class Game {
     // time at which both teams have guessed, else null
     let latest;
     for (const ts of round.teamStates) {
-      const g = findCorrectGuess(ts.guesses, round.word);
+      const g = findCorrectGuess(ts.guesses, round.word, this.fz);
       if (!g) return undefined;
       if (!latest || g.timestamp > latest) latest = g.timestamp;
     }
@@ -530,18 +616,18 @@ export class Game {
 
   scoreScreenTime(round) {
     const both = this.roundEndTime(round);
-    const drawStart = round.wordChosenTime + DRAWING_COUNTDOWN_SEC * 1000 + round.chooserHeadStartSeconds * 1000;
+    const drawStart = round.wordChosenTime + this.rule('drawingCountdownSec') * 1000 + round.chooserHeadStartSeconds * 1000;
     const end = both !== undefined ? both : drawStart + this.settings.roundLengthSec * 1000;
-    return end + DRAWING_END_SEC * 1000;
+    return end + this.rule('roundEndSec') * 1000;
   }
 
   inScoreScreen() {
     const round = this.currentRound;
     if (!round || round.wordChosenTime === undefined) return false;
     const both = this.roundEndTime(round);
-    const drawStart = round.wordChosenTime + DRAWING_COUNTDOWN_SEC * 1000 + round.chooserHeadStartSeconds * 1000;
+    const drawStart = round.wordChosenTime + this.rule('drawingCountdownSec') * 1000 + round.chooserHeadStartSeconds * 1000;
     const end = both !== undefined ? both : drawStart + this.settings.roundLengthSec * 1000;
-    return this.now() >= end + DRAWING_END_SEC * 1000;
+    return this.now() >= end + this.rule('roundEndSec') * 1000;
   }
 
   onReadyUp(userId, roundIndex) {
@@ -585,24 +671,24 @@ export class Game {
 
   // drawers for the next round: winner stays (if connected), everyone else rotates
   computeNextDrawers(lastRound) {
-    const winner = roundWinner(lastRound);
+    const winner = roundWinner(lastRound, this.fz);
     return lastRound.teamStates.map((ts, i) => {
       const d = ts.drawerId;
-      if (i === winner && this.users[d] && this.users[d].status !== Status.Disconnected) return d;
+      if (i === winner && !this.rule('alwaysRotate') && this.users[d] && this.users[d].status !== Status.Disconnected) return d;
       return this.nextDrawer(i, d);
     });
   }
 
   streakFor(rounds, drawers) {
     // consecutive wins by the same team and drawer, counted back from the last round
-    if (rounds.length === 0) return 0;
-    const lastWinner = roundWinner(rounds[rounds.length - 1]);
+    if (rounds.length === 0 || this.rule('alwaysRotate')) return 0;
+    const lastWinner = roundWinner(rounds[rounds.length - 1], this.fz);
     if (lastWinner === undefined) return 0;
     const drawer = rounds[rounds.length - 1].teamStates[lastWinner].drawerId;
     if (drawers[lastWinner] !== drawer) return 0;
     let s = 1;
     for (let i = rounds.length - 2; i >= 0; i--) {
-      const w = roundWinner(rounds[i]);
+      const w = roundWinner(rounds[i], this.fz);
       if (w !== lastWinner || rounds[i].teamStates[w].drawerId !== drawer) break;
       s += 1;
     }
@@ -617,9 +703,10 @@ export class Game {
     const index = rounds.length;
     const drawers = this.computeNextDrawers(last);
     if (index >= this.settings.numRounds) return this.startFinalRound(rounds, drawers);
-    const winner = roundWinner(last);
+    const winner = roundWinner(last, this.fz);
     const streak = this.streakFor(rounds, drawers);
-    const headStart = streak < 2 ? 0 : HEAD_START_BASE_SEC + (streak - 2) * HEAD_START_STEP_SEC;
+    const hsBase = this.rule('headStartBase');
+    const headStart = streak < 2 || hsBase <= 0 ? 0 : hsBase + (streak - 2) * this.rule('headStartStep');
     // the losing team's drawer chooses; with no winner the team that chose last time chooses again
     let chooserTeam;
     if (winner !== undefined) chooserTeam = 1 - winner;
@@ -655,7 +742,7 @@ export class Game {
       drawerId: this.nextDrawer(teamIndex, states[idx].drawerId),
       canvasOperations: [],
       guesses: [],
-      startTime: ts + FINAL_NEXT_WORD_DELAY_MS,
+      startTime: ts + this.rule('finalWordDelaySec') * 1000,
     };
     states.push(next);
     this.broadcast([S.FinalRoundNextWord, idx + 1, teamIndex, next]);

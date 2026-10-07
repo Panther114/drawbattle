@@ -6,6 +6,8 @@ import { track } from '../analytics.js';
 import { safeStorage } from '../storage.js';
 import WordListSelectorItem from './WordListSelectorItem.vue';
 import WordListSelectorModal from './WordListSelectorModal.vue';
+import RulesModal from './RulesModal.vue';
+import { DEFAULT_RULES } from '../shared.js';
 
 const props = defineProps({
   gameId: { type: String, required: true },
@@ -14,8 +16,8 @@ const props = defineProps({
 });
 const emit = defineEmits(['client-message']);
 
-const ROUND_OPTIONS = [10, 15, 20, 25];
-const ROUND_LENGTH_OPTIONS = [15, 30, 45, 60, 75, 90, 105, 120];
+const ROUND_OPTIONS = [4, 6, 8, 10, 12, 15, 20, 25, 30, 40];
+const ROUND_LENGTH_OPTIONS = [10, 15, 20, 30, 45, 60, 75, 90, 105, 120, 150, 180, 240, 300];
 
 const storage = safeStorage('local');
 const numRounds = ref(props.gameSettings.numRounds);
@@ -26,6 +28,10 @@ const showWordLength = ref(!props.gameSettings.hideWordLength);
 const streamerMode = ref(props.gameSettings.streamerMode);
 const copied = ref(false);
 const modalOpen = ref(false);
+const rulesOpen = ref(false);
+const changedRules = computed(
+  () => Object.keys(DEFAULT_RULES).filter((k) => props.gameSettings[k] !== undefined && props.gameSettings[k] !== DEFAULT_RULES[k]).length,
+);
 // a non-standard pack that was picked stays pinned at the top of the pack list
 const customPack = ref(isStandardPack(initialPack) ? undefined : initialPack);
 
@@ -202,6 +208,10 @@ const listIds = computed(() => {
             />
           </div>
           <div class="st-item">
+            <button class="st-rules-button" @click="rulesOpen = true">customize rules...</button>
+            <span v-if="changedRules > 0" class="st-rules-changed">{{ changedRules }} changed</span>
+          </div>
+          <div class="st-item">
             <label for="streamerMode" class="st-checkbox-label">
               streamer mode
               <div v-tooltip="{ content: 'this will hide the <nobr>game code</nobr>' }" class="st-question">
@@ -219,6 +229,13 @@ const listIds = computed(() => {
         </div>
       </div>
     </div>
+    <RulesModal
+      v-if="rulesOpen"
+      :game-settings="gameSettings"
+      :disabled="disabled"
+      @update="send"
+      @close-modal="rulesOpen = false"
+    />
     <WordListSelectorModal
       v-if="modalOpen"
       :game-id="gameId"

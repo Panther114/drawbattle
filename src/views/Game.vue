@@ -2,10 +2,7 @@
 import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import {
-  CHOOSE_WORD_SEC,
   C,
-  DRAWING_COUNTDOWN_SEC,
-  DRAWING_END_SEC,
   FINAL_PRE_START_SEC,
   FINAL_START_COUNTDOWN_SEC,
   FinalRoundStage,
@@ -20,6 +17,8 @@ import {
   isGameEnded,
   isIOS,
   isUnavailableJoinStatus,
+  applyRules,
+  rules,
   findCorrectGuess,
 } from '../shared.js';
 import { API } from '../wordpacks.js';
@@ -100,6 +99,12 @@ const teamIndex = computed(() => {
 const isGameOver = computed(() => finalStage.value?.stage === FinalRoundStage.SummaryScreen);
 provide('isGameOver', isGameOver);
 
+// per-game rules follow the game's settings (they can only change in the lobby)
+watch(
+  () => game.value?.settings,
+  (st) => applyRules(st),
+  { immediate: true, deep: true },
+);
 watch(
   () => soundsEnabled.value,
   (v) => local?.setItem('soundsEnabled', v ? '1' : '0'),
@@ -115,11 +120,11 @@ function audioCue(kind) {
 
 // ---- stage clocks ----
 function computeRoundStage(round, now, settings) {
-  if (round.wordChosenTime === undefined) return [RoundStage.ChooseWord, Math.ceil(CHOOSE_WORD_SEC - (now - round.startTime) / 1000)];
-  if (now - round.wordChosenTime < 1000 * DRAWING_COUNTDOWN_SEC) {
-    return [RoundStage.DrawingCountdown, Math.ceil(DRAWING_COUNTDOWN_SEC - (now - round.wordChosenTime) / 1000)];
+  if (round.wordChosenTime === undefined) return [RoundStage.ChooseWord, Math.ceil(rules.chooseWordSec - (now - round.startTime) / 1000)];
+  if (now - round.wordChosenTime < 1000 * rules.drawingCountdownSec) {
+    return [RoundStage.DrawingCountdown, Math.ceil(rules.drawingCountdownSec - (now - round.wordChosenTime) / 1000)];
   }
-  let drawStart = round.wordChosenTime + 1000 * DRAWING_COUNTDOWN_SEC;
+  let drawStart = round.wordChosenTime + 1000 * rules.drawingCountdownSec;
   if (round.chooserHeadStartSeconds > 0) {
     drawStart += 1000 * round.chooserHeadStartSeconds;
     if (now < drawStart) return [RoundStage.DrawingHeadStart, Math.ceil((drawStart - now) / 1000)];
@@ -127,7 +132,7 @@ function computeRoundStage(round, now, settings) {
   const both = bothGuessedTime(round);
   const end = both !== undefined ? both : drawStart + 1000 * settings.roundLengthSec;
   if (both === undefined && now < end) return [RoundStage.Drawing, Math.ceil((end - now) / 1000)];
-  if (now < end + 1000 * DRAWING_END_SEC) return [RoundStage.DrawingEnd, Math.ceil((end + 1000 * DRAWING_END_SEC - now) / 1000)];
+  if (now < end + 1000 * rules.roundEndSec) return [RoundStage.DrawingEnd, Math.ceil((end + 1000 * rules.roundEndSec - now) / 1000)];
   return [RoundStage.ScoreScreen, 0];
 }
 
@@ -138,7 +143,7 @@ function computeFinalStage(fr, now) {
   if (countMs > 0) return { stage: FinalRoundStage.StartCountdown, secondsRemaining: Math.ceil(countMs / 1000) };
   const win = finalRoundWinner(fr);
   if (win !== undefined) {
-    const secs = Math.ceil((win[1] + 1000 * DRAWING_END_SEC - now) / 1000);
+    const secs = Math.ceil((win[1] + 1000 * rules.roundEndSec - now) / 1000);
     return secs > 0 ? { stage: FinalRoundStage.RoundEnd, secondsRemaining: secs } : { stage: FinalRoundStage.SummaryScreen };
   }
   return {
@@ -161,9 +166,9 @@ watch(tick, (nowLocal) => {
   const now = nowLocal - clockOffset.value;
   const round = currentRound.value;
   // clients assume the first word if nobody chose in time
-  if (round !== undefined && round.wordChosenTime === undefined && now - round.startTime >= 1000 * CHOOSE_WORD_SEC) {
+  if (round !== undefined && round.wordChosenTime === undefined && now - round.startTime >= 1000 * rules.chooseWordSec) {
     round.word = round.wordChoices[0];
-    round.wordChosenTime = round.startTime + 1000 * CHOOSE_WORD_SEC;
+    round.wordChosenTime = round.startTime + 1000 * rules.chooseWordSec;
   }
   if (round !== undefined && game.value?.previousRounds.length === 0 && round.startTime > now) {
     startCountdown.value = Math.ceil((round.startTime - now) / 1000);
@@ -385,7 +390,11 @@ function onMessage(e) {
       if (g !== undefined) g.fishbowlWords = m[1];
       break;
     case S.ServerError:
-      if (m[1].type === 'GameNotFound') {
+      if (m[1].type === 'Closed') {
+        teardown();
+        nav.joinError = { status: JoinStatus.Closed, gameId: gameId.value, reason: m[1].reason };
+        router.replace({ name: 'Home' });
+      } else if (m[1].type === 'GameNotFound') {
         teardown();
         nav.joinError = { status: JoinStatus.Nonexistent, gameId: m[1].gameId };
         router.replace({ name: 'Home' });

@@ -12,7 +12,31 @@ network protocol, timings and rules were recorded by playing real games against 
 | ![word packs](docs/screenshots/03-word-packs.png) **word packs** | ![choose a word](docs/screenshots/04-choose-word.png) **choosing a word** |
 | ![drawing](docs/screenshots/05-drawing.png) **drawing & guessing** | ![round result](docs/screenshots/06-round-result.png) **round result** |
 | ![score](docs/screenshots/07-score.png) **score screen** | ![final drawdown](docs/screenshots/08-final-drawdown.png) **the final drawdown** |
-| ![summary](docs/screenshots/09-summary.png) **summary & recap** | |
+| ![summary](docs/screenshots/09-summary.png) **summary & recap** | ![rules](docs/screenshots/10-customize-rules.png) **customize rules** |
+| ![word pack creator](docs/screenshots/11-word-pack-creator.png) **word pack creator** | ![letter hints](docs/screenshots/12-letter-hints.png) **letter hints (custom rule)** |
+
+## customization (not in the original)
+
+Every game has a **customize rules...** dialog in the lobby (anyone in the lobby can change it; presets: classic, speedy,
+chill, chaos). All rules are stored in the game's settings, so they apply to everyone and survive "back to lobby".
+
+| group | rules |
+|---|---|
+| timing | time to choose a word, countdown before drawing, result screen length, game start countdown, final-round pause between words |
+| scoring | points for first / second guess, final-round points per word and finishing bonus, head start base and step (or off), drawers always rotate |
+| drawing | colour palette (full / basic / greys), allow eraser, allow clear |
+| guessing | 2-4 words to choose from, letter hints every N seconds, forgive one typo, single-word answers only, longest word allowed |
+| players | max team size, allow spectators, allow joining after the start |
+
+The lobby also offers more round counts (4-40) and round lengths (10 s - 5 min).
+
+### word pack creator
+
+Open **create your own word pack** on the home page (`/wordpacks`) or the **my packs** tab of the word pack window in a lobby.
+Packs live in your browser (localStorage). You can create and edit packs, clean up / sort / shuffle, import single files or
+a **whole folder** (each `.txt`, `.csv` or `.json` file becomes a pack), and export as `.json` / `.txt`.
+**use in this game** uploads the pack to the server (kept in memory for 24 h, max 3000 words) and selects it for the
+lobby; **get a shareable id** gives a 6-digit id anyone can enter under *browse all packs → community packs*.
 
 ## run
 

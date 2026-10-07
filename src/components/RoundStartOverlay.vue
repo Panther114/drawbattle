@@ -19,7 +19,7 @@ const props = defineProps({
 const emit = defineEmits(['client-message']);
 
 const chosenLock = ref(false);
-const ROTATIONS = [-3, 2];
+const ROTATIONS = [-3, 2, -2, 3];
 
 const isChosen = (i) => Boolean(props.round.word && props.round.word === props.round.wordChoices[i]);
 const isNotChosen = (i) => Boolean(props.round.word && props.round.word !== props.round.wordChoices[i]);

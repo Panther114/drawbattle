@@ -11,6 +11,9 @@ import {
   officialMeta,
   getWordListMeta,
   wordListExists,
+  addCustomPack,
+  reapCustomPacks,
+  touchPack,
 } from './wordpacks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -47,7 +50,8 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', true);
 app.get('/healthz', (req, res) => res.type('text/plain').send('ok'));
-app.use(express.json({ limit: '64kb' }));
+const smallJson = express.json({ limit: '64kb' });
+app.use((req, res, next) => (req.path === '/api/wordpacks' ? next() : smallJson(req, res, next)));
 
 // ---- REST API (mirrors api.drawbattle.io) ----
 const api = express.Router();
@@ -93,6 +97,20 @@ api.post('/games/:id/backToLobby', (req, res) => {
     game.nextGameId = next.id;
   }
   res.json({ nextGameId: game.nextGameId });
+});
+
+// create (or reuse) a custom word pack
+const packJson = express.json({ limit: '256kb' });
+const packLog = new Map();
+api.post('/wordpacks', packJson, (req, res) => {
+  const now = Date.now();
+  const recent = (packLog.get(req.ip) || []).filter((t) => now - t < 10 * 60 * 1000);
+  if (recent.length >= 40) return res.status(429).type('text/plain').send('too many word packs, slow down');
+  recent.push(now);
+  packLog.set(req.ip, recent);
+  const out = addCustomPack(req.body || {});
+  if (out.error) return res.status(400).type('text/plain').send(out.error);
+  res.json(out.meta);
 });
 
 api.get('/wordlists', (req, res) => {
@@ -190,6 +208,8 @@ setInterval(
         games.delete(id);
       }
     }
+    reapCustomPacks(new Set([...games.values()].map((g) => g.settings && g.settings.wordListId)));
+    for (const [ip, list] of packLog) if (!list.some((t) => now - t < 10 * 60 * 1000)) packLog.delete(ip);
     for (const [ip, list] of createLog) if (!list.some((t) => now - t < 10 * 60 * 1000)) createLog.delete(ip);
   },
   5 * 60 * 1000,

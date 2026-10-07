@@ -5,6 +5,7 @@ import Home from './views/Home.vue';
 import Game from './views/Game.vue';
 import Terms from './views/Terms.vue';
 import Debug from './views/Debug.vue';
+import WordPacks from './views/WordPacks.vue';
 import { tooltip } from './tooltip.js';
 import { loadOfficialPacks } from './wordpacks.js';
 import './style.css';
@@ -40,6 +41,7 @@ const routes = [
   ...packRoutes,
   { path: '/terms', name: 'Terms of Service', component: Terms },
   { path: '/debug', name: 'Debug', component: Debug },
+  { path: '/wordpacks', name: 'WordPacks', component: WordPacks },
   { path: '/wordpack/:wordListId(\\d+)', name: 'Wordpack', component: Home, props: true },
   {
     path: '/:gameId([a-zA-Z]{4})',

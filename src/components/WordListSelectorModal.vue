@@ -3,6 +3,7 @@ import { nextTick, onMounted, ref } from 'vue';
 import { communityIds, loadCommunityPacks, loadPack, officialIds, packs } from '../wordpacks.js';
 import { track } from '../analytics.js';
 import Modal from './Modal.vue';
+import WordPackEditor from './WordPackEditor.vue';
 import WordListSelectorItem from './WordListSelectorItem.vue';
 
 const props = defineProps({ gameId: { type: String, required: true } });
@@ -43,7 +44,7 @@ function clickTab(name) {
 </script>
 
 <template>
-  <Modal @close-modal="emit('close-modal')">
+  <Modal :wide="tab === 'mine'" @close-modal="emit('close-modal')">
     <div class="wp-modal">
       <div class="wp-tabs">
         <button class="wp-tab" :class="{ selected: tab === 'official' }" @click="clickTab('official')">
@@ -53,12 +54,14 @@ function clickTab(name) {
           community packs
           <div class="wp-tab-new">new!</div>
         </button>
+        <button class="wp-tab" :class="{ selected: tab === 'mine' }" @click="clickTab('mine')">my packs</button>
       </div>
       <div v-if="tab === 'official'">
         <template v-for="id in officialIds" :key="id">
           <WordListSelectorItem v-if="packs[id] !== undefined" :word-list-id="id" @select-list="emit('select-list', id)" />
         </template>
       </div>
+      <WordPackEditor v-else-if="tab === 'mine'" :game-id="gameId" @use="(id) => emit('select-list', id)" />
       <div v-else>
         <div class="wp-custom-text">
           <div class="wp-custom">

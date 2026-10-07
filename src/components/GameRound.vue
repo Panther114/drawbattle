@@ -2,7 +2,8 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import {
   C,
-  CHOOSE_WORD_SEC,
+  rules,
+  hintedWord,
   MAX_GUESS_LENGTH,
   Op,
   RoundStage,
@@ -61,7 +62,7 @@ const clock = computed(() => {
     if (guessedTime.value !== undefined) {
       const elapsed =
         guessedTime.value -
-        (props.round.wordChosenTime + 1000 * (props.round.chooserHeadStartSeconds + 3));
+        (props.round.wordChosenTime + 1000 * (props.round.chooserHeadStartSeconds + rules.drawingCountdownSec));
       t = Math.ceil(roundLength - elapsed / 1000);
     } else t = 0;
   }
@@ -156,7 +157,13 @@ const isGuesser = computed(() => !isDrawer.value && !didGuess.value);
 const shownWord = computed(() => {
   const w = props.round.word;
   if (!w) return '';
-  return isGuesser.value ? redactWord(w) : w;
+  if (!isGuesser.value) return w;
+  const every = rules.hintIntervalSec;
+  if (every > 0 && props.roundStage === RoundStage.Drawing) {
+    const elapsed = props.gameSettings.roundLengthSec - props.roundStageSecondsRemaining;
+    return hintedWord(w, Math.floor(elapsed / every));
+  }
+  return redactWord(w);
 });
 const trimmedGuess = computed(() => guess.value.trim());
 const tooLong = computed(() => trimmedGuess.value.length > MAX_GUESS_LENGTH);
@@ -184,7 +191,6 @@ function submitGuess() {
     recentGuesses.value--;
   }, 3000);
 }
-void CHOOSE_WORD_SEC;
 </script>
 
 <template>

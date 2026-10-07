@@ -2,8 +2,8 @@
 import { computed, onUnmounted, ref } from 'vue';
 import {
   C,
-  HEAD_START_BASE_SEC,
-  HEAD_START_STEP_SEC,
+  headStartForStreak,
+  rules,
   Sound,
   UserStatus,
   canAutoStartNext,
@@ -113,7 +113,7 @@ const nextDrawers = computed(() => {
   const w = winner.value;
   return props.round.teamStates.map((ts, i) => {
     const drawer = ts.drawerId;
-    return i === w && props.users[drawer].status !== UserStatus.Disconnected
+    return i === w && !rules.alwaysRotate && props.users[drawer].status !== UserStatus.Disconnected
       ? drawer
       : nextDrawer(props.teams[i], props.users, drawer);
   });
@@ -125,7 +125,7 @@ const lineups = computed(() =>
   }),
 );
 const streak = computed(() => winStreak([...props.previousRounds, props.round], nextDrawers.value));
-const headStart = computed(() => (streak.value < 2 ? 0 : HEAD_START_BASE_SEC + (streak.value - 2) * HEAD_START_STEP_SEC));
+const headStart = computed(() => headStartForStreak(streak.value));
 const isReady = (id) => props.readyUserIds?.has(id);
 const iAmReady = computed(() => props.readyUserIds?.has(props.currentUserId));
 const showForce = computed(

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { RoundStage, S, Sound, bothGuessedTime, formatClock } from '../shared.js';
+import { RoundStage, S, Sound, bothGuessedTime, formatClock, rules } from '../shared.js';
 import SpectatorTeamView from './SpectatorTeamView.vue';
 
 const props = defineProps({
@@ -25,7 +25,7 @@ const clock = computed(() => {
   else if (props.roundStage === RoundStage.DrawingEnd) {
     if (guessedTime.value !== undefined) {
       const elapsed =
-        guessedTime.value - (props.round.wordChosenTime + 1000 * (props.round.chooserHeadStartSeconds + 3));
+        guessedTime.value - (props.round.wordChosenTime + 1000 * (props.round.chooserHeadStartSeconds + rules.drawingCountdownSec));
       t = Math.ceil(roundLength - elapsed / 1000);
     } else t = 0;
   }

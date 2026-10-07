@@ -1,5 +1,46 @@
 // Shared constants and pure helpers (game rules mirrored on the server).
 
+import { reactive } from 'vue';
+
+// ---- per-game rules (customisable in the lobby; every key is optional in game.settings) ----
+export const DEFAULT_RULES = {
+  chooseWordSec: 15, // time the chooser has to pick a word
+  wordChoiceCount: 2, // words offered to the chooser (2-4)
+  startCountdownSec: 5, // lobby countdown before round 1
+  drawingCountdownSec: 3, // pause between choosing and drawing
+  roundEndSec: 5, // pause on the result screen after a round
+  pointsWin: 200, // points for guessing first
+  pointsCorrect: 100, // points for guessing second
+  finalWordPoints: 100, // final round: points per word
+  finalBonusPoints: 100, // final round: bonus for finishing every word
+  headStartBase: 3, // head start (s) at a 2-win streak (0 = no head starts)
+  headStartStep: 1, // extra head start per additional win
+  finalWordDelaySec: 2, // final round: pause before the next word
+  hintIntervalSec: 0, // reveal one letter to guessers every N seconds (0 = off)
+  palette: 'full', // full | basic | mono
+  allowEraser: true,
+  allowClear: true,
+  fuzzyMatch: false, // accept guesses with one typo (words of 6+ letters)
+  maxTeamSize: 8,
+  alwaysRotate: false, // the drawer always rotates, even after winning
+  allowSpectators: true,
+  allowLateJoin: true,
+  singleWordsOnly: false, // only offer words without spaces
+  maxWordLength: 0, // only offer words up to this many characters (0 = any)
+};
+export const rules = reactive({ ...DEFAULT_RULES });
+export function applyRules(settings) {
+  for (const k of Object.keys(DEFAULT_RULES)) {
+    const v = settings ? settings[k] : undefined;
+    rules[k] = v === undefined || v === null || typeof v !== typeof DEFAULT_RULES[k] ? DEFAULT_RULES[k] : v;
+  }
+}
+export const PALETTES = {
+  full: ['000000', 'd0d0d0', 'ffc7eb', 'ed120e', 'ff6504', 'ffe006', '07c504', '00a9ff', '9905b1', '964828'],
+  basic: ['000000', 'ed120e', 'ffe006', '07c504', '00a9ff'],
+  mono: ['000000', '808080', 'd0d0d0'],
+};
+
 // ---- timing (seconds) ----
 export const CHOOSE_WORD_SEC = 15;
 export const DRAWING_COUNTDOWN_SEC = 3;
@@ -52,6 +93,7 @@ export const JoinStatus = {
   AvailableDisconnectedSpot: 'AvailableDisconnectedSpot',
   Full: 'Full',
   Ended: 'Ended',
+  Closed: 'Closed',
 };
 
 // server -> client
@@ -118,8 +160,57 @@ export function normalizeGuess(s) {
     .replace(/[^\w一-鿿㐀-䶿가-힯ß]/g, '');
 }
 
+function withinOneEdit(a, b) {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i++;
+      j++;
+    } else {
+      if (++edits > 1) return false;
+      if (a.length > b.length) i++;
+      else if (a.length < b.length) j++;
+      else {
+        i++;
+        j++;
+      }
+    }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
 export function guessMatches(guess, word) {
-  return !!word && normalizeGuess(guess) === normalizeGuess(word);
+  if (!word) return false;
+  const g = normalizeGuess(guess);
+  const w = normalizeGuess(word);
+  if (g === w) return true;
+  return rules.fuzzyMatch && w.length >= 6 && g.length > 0 && withinOneEdit(g, w);
+}
+
+// word shown to guessers: underscores, with letters revealed over time when hints are on
+export function hintedWord(word, revealed) {
+  const base = redactWord(word);
+  if (revealed <= 0) return base;
+  const chars = [...stripAccents(word)];
+  const positions = [];
+  chars.forEach((c, i) => {
+    if (base[i] === '_') positions.push(i);
+  });
+  // deterministic shuffle seeded by the word so every viewer reveals the same letters
+  let seed = 0;
+  for (const c of word) seed = (seed * 31 + c.charCodeAt(0)) >>> 0;
+  const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  for (let i = positions.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [positions[i], positions[j]] = [positions[j], positions[i]];
+  }
+  const out = [...base];
+  const max = Math.min(revealed, Math.floor(positions.length / 2));
+  for (let k = 0; k < max; k++) out[positions[k]] = chars[positions[k]];
+  return out.join('');
 }
 
 export function findCorrectGuess(guesses, word) {
@@ -143,6 +234,7 @@ export function roundWinner(round) {
 
 // number of consecutive wins by the drawer who is about to draw again
 export function winStreak(rounds, nextDrawers) {
+  if (rules.alwaysRotate) return 0;
   if (rounds.length === 0) return 0;
   const last = rounds[rounds.length - 1];
   const w = roundWinner(last);
@@ -159,7 +251,7 @@ export function winStreak(rounds, nextDrawers) {
 }
 
 export function headStartForStreak(streak) {
-  return streak < 2 ? 0 : HEAD_START_BASE_SEC + (streak - 2) * HEAD_START_STEP_SEC;
+  return streak < 2 || rules.headStartBase <= 0 ? 0 : rules.headStartBase + (streak - 2) * rules.headStartStep;
 }
 
 // per-team result of a round
@@ -181,7 +273,7 @@ export function roundResults(round) {
     const didWin = i === winner;
     return {
       didWin,
-      score: didWin ? 200 : times[i] !== undefined ? 100 : 0,
+      score: didWin ? rules.pointsWin : times[i] !== undefined ? rules.pointsCorrect : 0,
       timeDifferential:
         times[i] !== undefined && times[1 - i] !== undefined ? Math.abs(times[i] - times[1 - i]) : undefined,
     };
@@ -200,8 +292,8 @@ export function finalWordsDone(finalRound, teamIndex) {
 export function finalRoundScores(finalRound) {
   return finalRound.teamStates.map((_, t) => {
     const done = finalWordsDone(finalRound, t);
-    let s = 100 * done;
-    if (done === finalRound.words.length) s += 100;
+    let s = rules.finalWordPoints * done;
+    if (done === finalRound.words.length) s += rules.finalBonusPoints;
     return s;
   });
 }
@@ -273,7 +365,7 @@ export function bothGuessedTime(round) {
 export function drawingStartTime(round, teamIndex) {
   return (
     round.wordChosenTime +
-    DRAWING_COUNTDOWN_SEC * 1000 +
+    rules.drawingCountdownSec * 1000 +
     (round.chooserId !== round.teamStates[teamIndex].drawerId ? round.chooserHeadStartSeconds * 1000 : 0)
   );
 }

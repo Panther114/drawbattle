@@ -2,7 +2,7 @@
 import { computed, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import confetti from 'canvas-confetti';
-import { Sound, finalRoundScores, totalScores, DRAWING_COUNTDOWN_SEC, roundScores } from '../shared.js';
+import { Sound, finalRoundScores, totalScores, rules, roundScores } from '../shared.js';
 import { API } from '../wordpacks.js';
 import { track } from '../analytics.js';
 import { nav } from '../nav.js';
@@ -121,7 +121,7 @@ const startTimeFor = (original, teamIdx, roundIdx) => {
   const r = props.game.previousRounds[roundIdx];
   return (
     r.wordChosenTime +
-    1000 * DRAWING_COUNTDOWN_SEC +
+    1000 * rules.drawingCountdownSec +
     (r.chooserId === r.teamStates[teamIdx].drawerId ? 1000 * r.chooserHeadStartSeconds : 0)
   );
 };

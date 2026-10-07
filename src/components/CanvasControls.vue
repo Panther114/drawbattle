@@ -5,7 +5,9 @@ defineProps({
   drawerStrokeWidth: { type: Number, required: true },
 });
 defineEmits(['stroke-width-click', 'color-click', 'pencil-click', 'eraser-click', 'clear-click']);
-const COLORS = ['000000', 'd0d0d0', 'ffc7eb', 'ed120e', 'ff6504', 'ffe006', '07c504', '00a9ff', '9905b1', '964828'];
+import { computed } from 'vue';
+import { PALETTES, rules } from '../shared.js';
+const COLORS = computed(() => PALETTES[rules.palette] || PALETTES.full);
 const WIDTHS = [1, 2, 3, 4];
 </script>
 
@@ -19,12 +21,13 @@ const WIDTHS = [1, 2, 3, 4];
         @click="$emit('pencil-click')"
       />
       <button
+        v-if="rules.allowEraser"
         v-tooltip="'eraser'"
         class="cc-tool eraser"
         :class="{ selected: drawerTool === 'eraser' }"
         @click="$emit('eraser-click')"
       />
-      <button v-tooltip="'clear drawing'" class="cc-tool clear" @click="$emit('clear-click')" />
+      <button v-if="rules.allowClear" v-tooltip="'clear drawing'" class="cc-tool clear" @click="$emit('clear-click')" />
       <div v-tooltip="'change size'" class="cc-widths">
         <button v-for="w in WIDTHS" :key="w" class="cc-width" @click="$emit('stroke-width-click', w)">
           <div class="cc-width-circle" :class="['w' + w, { selected: drawerStrokeWidth === w }]" />

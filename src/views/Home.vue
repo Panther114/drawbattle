@@ -31,7 +31,7 @@ onMounted(() => {
   if (listId.value !== undefined) void loadPack(listId.value);
 });
 
-function errorText(status, id) {
+function errorText(status, id, reason) {
   const code = id.toUpperCase();
   switch (status) {
     case JoinStatus.Nonexistent:
@@ -40,6 +40,8 @@ function errorText(status, id) {
       return `game ${code} already started. sorry!`;
     case JoinStatus.Full:
       return `game ${code} is full. sorry!`;
+    case JoinStatus.Closed:
+      return reason === 'spectators' ? `game ${code} doesn't allow spectators` : `game ${code} doesn't allow late joiners`;
     default:
       return '';
   }
@@ -84,7 +86,7 @@ async function joinGame() {
 
 <template>
   <div class="hm-root">
-    <div v-if="errorFromGame" class="hm-join-error-from-game">{{ errorText(errorFromGame.status, errorFromGame.gameId) }}</div>
+    <div v-if="errorFromGame" class="hm-join-error-from-game">{{ errorText(errorFromGame.status, errorFromGame.gameId, errorFromGame.reason) }}</div>
     <div class="hm-title">draw battle!</div>
     <div class="hm-tagline">two teams of drawers face off with a frantic final round</div>
     <HomeWordPackUnit v-if="listId !== undefined" :word-list="list" />
@@ -114,6 +116,7 @@ async function joinGame() {
         </Btn>
       </form>
     </div>
+    <router-link to="/wordpacks" class="hm-create-packs">create your own word pack</router-link>
     <div class="hm-how-header">how to play</div>
     <div class="hm-how">
       <div class="hm-how-row">

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { C, MAX_TEAM_SIZE, Sound } from '../shared.js';
+import { C, rules, Sound } from '../shared.js';
 import { packs } from '../wordpacks.js';
 import { track } from '../analytics.js';
 import { safeStorage } from '../storage.js';
@@ -81,7 +81,7 @@ function joinTeam(i) {
   emit('client-message', [C.JoinTeam, i]);
   lastJoin = [i, now];
 }
-const isFull = (t) => t.userIds.length >= MAX_TEAM_SIZE;
+const isFull = (t) => t.userIds.length >= rules.maxTeamSize;
 const needsPlayers = computed(() => props.teams.some((t) => t.userIds.length < 2));
 const starting = computed(() => props.startGameSecondsRemaining !== undefined);
 const startDisabled = computed(
