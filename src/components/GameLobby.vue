@@ -1,0 +1,184 @@
+<script setup>
+import { computed, onMounted, ref, watch } from 'vue';
+import { C, MAX_TEAM_SIZE, Sound } from '../shared.js';
+import { packs } from '../wordpacks.js';
+import { track } from '../analytics.js';
+import { safeStorage } from '../storage.js';
+import Btn from './Btn.vue';
+import FishbowlPopulation from './FishbowlPopulation.vue';
+import Footer from './Footer.vue';
+import Settings from './Settings.vue';
+import Username from './Username.vue';
+
+const props = defineProps({
+  isConnected: { type: Boolean, required: true },
+  gameId: { type: String, required: true },
+  userId: { type: String, required: true },
+  isSpectator: { type: Boolean, required: true },
+  users: { type: Object, required: true },
+  teams: { type: Array, required: true },
+  gameSettings: { type: Object, required: true },
+  fishbowlWords: { type: Object },
+  connectedApp: { type: String },
+  startGameSecondsRemaining: { type: Number },
+  initUserName: { type: String },
+});
+const emit = defineEmits(['client-message', 'audio-cue', 'join-game', 'spectate-game']);
+
+const storage = safeStorage('local');
+if (props.initUserName != null) storage?.setItem('userName', props.initUserName);
+const name = ref(props.initUserName ?? storage?.getItem('userName') ?? '');
+const nameInput = ref();
+const startCooldown = ref(false);
+
+onMounted(() => nameInput.value?.focus());
+
+watch(
+  () => props.startGameSecondsRemaining,
+  (now, before) => {
+    if (now !== undefined) emit('audio-cue', Sound.BeepLow);
+    if (now === undefined && before !== undefined) {
+      // briefly lock the start button after a cancelled countdown
+      startCooldown.value = true;
+      setTimeout(() => {
+        startCooldown.value = false;
+      }, 3000);
+    }
+  },
+);
+
+const pack = computed(() => packs[props.gameSettings.wordListId]);
+
+function debounce(fn, ms) {
+  let t;
+  return (...a) => {
+    clearTimeout(t);
+    t = window.setTimeout(() => fn(...a), ms);
+  };
+}
+const pushName = debounce(() => {
+  const n = name.value.trim();
+  storage?.setItem('userName', n);
+  if (props.isConnected) emit('client-message', [C.UpdateUserName, n]);
+}, 500);
+
+let lastStart = 0;
+function startGame() {
+  const now = Date.now();
+  if (now < lastStart + 200) return;
+  lastStart = now;
+  track('click start game button', { 'game id': props.gameId });
+  emit('client-message', [C.StartGame]);
+}
+function cancelStart() {
+  track('click cancel start game button', { 'game id': props.gameId });
+  emit('client-message', [C.CancelStartGame]);
+}
+let lastJoin;
+function joinTeam(i) {
+  const now = Date.now();
+  if (lastJoin !== undefined && lastJoin[0] === i && now < lastJoin[1] + 500) return;
+  emit('client-message', [C.JoinTeam, i]);
+  lastJoin = [i, now];
+}
+const isFull = (t) => t.userIds.length >= MAX_TEAM_SIZE;
+const needsPlayers = computed(() => props.teams.some((t) => t.userIds.length < 2));
+const starting = computed(() => props.startGameSecondsRemaining !== undefined);
+const startDisabled = computed(
+  () =>
+    props.isSpectator ||
+    needsPlayers.value ||
+    starting.value ||
+    startCooldown.value ||
+    (pack.value !== undefined && pack.value.numWords < 2 * props.gameSettings.numRounds),
+);
+</script>
+
+<template>
+  <div class="lobby-root">
+    <div v-if="connectedApp !== undefined" class="lobby-welcome">
+      <div class="lobby-welcome-header">welcome to drawbattle.io!</div>
+      <div class="lobby-welcome-tagline">two teams of drawers face off with a frantic final round</div>
+    </div>
+
+    <form v-if="!isSpectator" class="lobby-name-form" @submit.prevent="emit('join-game', name.trim())">
+      <label class="lobby-name-label" for="nameInput">my name is</label>
+      <input
+        id="nameInput"
+        ref="nameInput"
+        v-model="name"
+        type="text"
+        class="lobby-name-input"
+        maxlength="12"
+        autocorrect="off"
+        spellcheck="false"
+        :disabled="fishbowlWords !== undefined || starting"
+        @input="pushName"
+      />
+      <template v-if="!isConnected">
+        <div>
+          <Btn :force-rotation="-2" class="lobby-join-button" :disabled="name.trim().length === 0">join game</Btn>
+        </div>
+        <div class="lobby-spectate-row">
+          <a href="#" class="spectate-link" @click.prevent="emit('spectate-game')">join as spectator</a>
+        </div>
+      </template>
+    </form>
+
+    <template v-if="isConnected">
+      <div class="lobby-teams">
+        <div v-for="(team, ti) in teams" :key="team.name" class="lobby-team">
+          <div class="lobby-team-name">{{ team.name }}</div>
+          <div class="lobby-team-line" />
+          <div
+            v-for="uid in team.userIds"
+            :key="uid"
+            class="lobby-user"
+            :class="{ submitted: fishbowlWords !== undefined && fishbowlWords[uid] !== undefined }"
+          >
+            <span v-if="uid === userId">{{ name.trim() || 'anonymous' }} (you)</span>
+            <Username v-else :user="users[uid]" />
+          </div>
+          <Btn
+            v-if="!(isSpectator || fishbowlWords !== undefined)"
+            class="lobby-join-team"
+            color="purple"
+            :disabled="starting || team.userIds.includes(userId) || isFull(team)"
+            :force-rotation="ti % 2 === 0 ? -2.5 : 3"
+            @click="joinTeam(ti)"
+          >
+            {{ isFull(team) ? 'team full' : `join ${team.name}` }}
+          </Btn>
+        </div>
+      </div>
+
+      <FishbowlPopulation
+        v-if="fishbowlWords !== undefined"
+        :num-users="Object.keys(users).length"
+        :num-rounds="gameSettings.numRounds"
+        :fishbowl-words="fishbowlWords"
+        :user-id="userId"
+        :start-game-seconds-remaining="startGameSecondsRemaining"
+        @client-message="(m) => emit('client-message', m)"
+      />
+      <template v-else>
+        <div class="lobby-start-container">
+          <Btn :force-rotation="0" :disabled="startDisabled" @click="startGame">
+            {{ starting ? `starting in ${startGameSecondsRemaining}...` : 'start game!' }}
+          </Btn>
+          <div class="lobby-start-subtext">
+            <template v-if="needsPlayers">each team needs at least 2 players</template>
+            <button v-if="!isSpectator && starting" class="lobby-cancel" @click="cancelStart">cancel</button>
+          </div>
+        </div>
+        <Settings
+          :game-id="gameId"
+          :game-settings="gameSettings"
+          :disabled="isSpectator || starting"
+          @client-message="(m) => emit('client-message', m)"
+        />
+      </template>
+      <Footer />
+    </template>
+  </div>
+</template>

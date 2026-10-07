@@ -1,0 +1,236 @@
+<script setup>
+import { computed, onUnmounted, ref } from 'vue';
+import {
+  C,
+  HEAD_START_BASE_SEC,
+  HEAD_START_STEP_SEC,
+  Sound,
+  UserStatus,
+  canAutoStartNext,
+  drawingStartTime,
+  nextDrawer,
+  roundScores,
+  roundWinner,
+  totalScores,
+  winStreak,
+} from '../shared.js';
+import { track } from '../analytics.js';
+import Btn from './Btn.vue';
+import IconWithText from './IconWithText.vue';
+import TeamBoard from './TeamBoard.vue';
+import Username from './Username.vue';
+
+const props = defineProps({
+  gameId: { type: String, required: true },
+  roundIndex: { type: Number, required: true },
+  round: { type: Object, required: true },
+  readyUserIds: { type: Object },
+  previousRounds: { type: Array, required: true },
+  users: { type: Object, required: true },
+  teams: { type: Array, required: true },
+  isSpectator: { type: Boolean, required: true },
+  currentUserId: { type: String, required: true },
+  gameSettings: { type: Object, required: true },
+});
+const emit = defineEmits(['client-message', 'audio-cue']);
+
+// stages of the reveal animation
+const Stage = { Score: 0, Drawer: 1, GetReadyFor: 2, TheFinalDrawdown: 3, Recap: 4 };
+
+const shownScores = ref([]);
+const stage = ref(Stage.Score);
+const roundNumber = computed(() => props.previousRounds.length + 1);
+const isLastRound = computed(() => roundNumber.value === props.gameSettings.numRounds);
+const readyLock = ref(false);
+const forceAvailable = ref(false);
+const timers = [];
+const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+
+function ready() {
+  if (readyLock.value) return;
+  emit('client-message', [C.ReadyUp, props.roundIndex]);
+  readyLock.value = true;
+  setTimeout(() => {
+    readyLock.value = false;
+  }, 3000);
+}
+function forceStart() {
+  emit('client-message', [C.ForceStartNextRound, props.roundIndex]);
+  track('click start next round button', {
+    'game id': props.gameId,
+    'user id': props.currentUserId,
+    'round index': props.roundIndex,
+  });
+}
+
+// ---- reveal timeline ----
+{
+  const before = props.previousRounds.length > 0 ? totalScores(props.previousRounds, undefined) : props.teams.map(() => 0);
+  shownScores.value = before;
+  const gained = roundScores(props.round);
+  let t = 0;
+  if (gained.some((s) => s > 0)) {
+    for (let step = 1; step <= 20; step++) {
+      later(() => {
+        shownScores.value = before.map((b, i) => b + Math.floor((gained[i] * step) / 20));
+      }, 500 + 50 * step);
+    }
+    later(() => emit('audio-cue', Sound.ScoreTally), 500);
+    t += 1500;
+  }
+  t += 500;
+  later(() => {
+    stage.value = Stage.Drawer;
+  }, t);
+  if (isLastRound.value) {
+    t += 1000;
+    later(() => {
+      stage.value = Stage.GetReadyFor;
+    }, t);
+    t += 500;
+    later(() => {
+      stage.value = Stage.TheFinalDrawdown;
+    }, t);
+    t += 2500;
+    later(() => {
+      stage.value = Stage.Recap;
+    }, t);
+  } else {
+    t += 2000;
+    later(() => {
+      stage.value = Stage.Recap;
+    }, t);
+  }
+}
+later(() => {
+  forceAvailable.value = true;
+}, 11000);
+onUnmounted(() => timers.forEach(clearTimeout));
+
+// ---- derived display data ----
+const winner = computed(() => roundWinner(props.round));
+const nextDrawers = computed(() => {
+  const w = winner.value;
+  return props.round.teamStates.map((ts, i) => {
+    const drawer = ts.drawerId;
+    return i === w && props.users[drawer].status !== UserStatus.Disconnected
+      ? drawer
+      : nextDrawer(props.teams[i], props.users, drawer);
+  });
+});
+const lineups = computed(() =>
+  props.teams.map((team, i) => {
+    const n = team.userIds.indexOf(nextDrawers.value[i]);
+    return team.userIds.slice(isLastRound.value ? n : n + 1).concat(team.userIds.slice(0, n));
+  }),
+);
+const streak = computed(() => winStreak([...props.previousRounds, props.round], nextDrawers.value));
+const headStart = computed(() => (streak.value < 2 ? 0 : HEAD_START_BASE_SEC + (streak.value - 2) * HEAD_START_STEP_SEC));
+const isReady = (id) => props.readyUserIds?.has(id);
+const iAmReady = computed(() => props.readyUserIds?.has(props.currentUserId));
+const showForce = computed(
+  () =>
+    props.readyUserIds !== undefined &&
+    (forceAvailable.value || canAutoStartNext(Array.from(props.readyUserIds), props.teams, props.users)),
+);
+
+// what to render in each team column below the score
+function drawerBlock(i) {
+  const showDrawer = stage.value >= Stage.Drawer;
+  if (winner.value === i) {
+    const drawer = props.round.teamStates[winner.value].drawerId;
+    if (!showDrawer || (!isLastRound.value && nextDrawers.value[i] === drawer)) {
+      return { kind: 'winner', id: drawer };
+    }
+    return isLastRound.value ? undefined : { kind: 'next', label: 'next drawer', id: nextDrawers.value[i] };
+  }
+  if (showDrawer) {
+    if (isLastRound.value) return undefined;
+    return {
+      kind: 'challenger',
+      label: winner.value === undefined ? 'next drawer' : 'next challenger',
+      id: nextDrawers.value[i],
+    };
+  }
+  return { kind: 'old', id: props.round.teamStates[i].drawerId };
+}
+void drawingStartTime;
+</script>
+
+<template>
+  <div class="sc-root">
+    <div class="sc-round-header">round {{ roundNumber }}</div>
+    <div class="sc-round-line" />
+    <div class="sc-team-columns">
+      <div v-for="(team, i) in teams" :key="i" class="sc-team-column">
+        <div class="sc-team-score">{{ shownScores[i] }}</div>
+        <Transition mode="out-in" name="sc-fade">
+          <div v-if="drawerBlock(i)?.kind === 'winner'" key="winningDrawer" class="sc-drawer">
+            <div class="sc-small-header">winner</div>
+            <div class="sc-drawer-name" :class="{ 'sc-readied': isReady(drawerBlock(i).id) }">
+              <Username :user="users[drawerBlock(i).id]" />
+            </div>
+            <IconWithText v-if="streak >= 2" icon="trophy" color="yellow">{{ streak }}x streak</IconWithText>
+          </div>
+          <div
+            v-else-if="drawerBlock(i)?.kind === 'next' || drawerBlock(i)?.kind === 'challenger'"
+            key="newDrawer"
+            class="sc-drawer"
+          >
+            <div class="sc-small-header">{{ drawerBlock(i).label }}</div>
+            <div class="sc-drawer-name" :class="{ 'sc-readied': isReady(drawerBlock(i).id) }">
+              <Username :user="users[drawerBlock(i).id]" />
+            </div>
+            <IconWithText v-if="drawerBlock(i).kind === 'challenger' && headStart > 0" icon="headstartClock" color="yellow">
+              {{ headStart }}s head start
+            </IconWithText>
+          </div>
+          <div v-else-if="drawerBlock(i)?.kind === 'old'" key="oldDrawer" class="sc-drawer">
+            <div class="sc-small-header">last drawer</div>
+            <div class="sc-drawer-name sc-losing-drawer"><Username :user="users[drawerBlock(i).id]" /></div>
+          </div>
+          <div v-else />
+        </Transition>
+      </div>
+    </div>
+
+    <Transition enter-from-class="sc-fade-enter-from" enter-active-class="sc-fade-enter-active">
+      <div v-if="isLastRound && stage >= Stage.GetReadyFor">it's time for...</div>
+    </Transition>
+    <Transition enter-from-class="sc-final-enter-from" enter-active-class="sc-final-enter-active">
+      <div v-if="isLastRound && stage >= Stage.TheFinalDrawdown" class="sc-final-title">the final drawdown!</div>
+    </Transition>
+
+    <Transition enter-from-class="sc-fade-enter-from" enter-active-class="sc-fade-enter-active">
+      <div v-if="stage === Stage.Recap" class="sc-recap">
+        <div class="sc-team-columns">
+          <div v-for="(team, i) in teams" :key="i" class="sc-team-column">
+            <div class="sc-small-header">{{ isLastRound ? 'lineup' : 'on deck' }}</div>
+            <div v-for="id in lineups[i]" :key="id" class="sc-on-deck" :class="{ 'sc-readied': isReady(id) }">
+              <Username :user="users[id]" />
+            </div>
+          </div>
+        </div>
+        <template v-if="!isSpectator">
+          <Btn :disabled="iAmReady" @click="ready">{{ iAmReady ? 'waiting...' : 'continue' }}</Btn>
+          <button v-if="showForce" class="sc-force-start" @click="forceStart">
+            start {{ isLastRound ? 'final drawdown' : 'next round' }}
+          </button>
+          <div class="sc-continue-spacer" />
+        </template>
+        <div class="sc-team-boards">
+          <TeamBoard
+            v-for="(team, i) in teams"
+            :key="i"
+            class="sc-team-board"
+            :word="round.word"
+            :drawing-stage-start-time="drawingStartTime(round, i)"
+            :users="users"
+            :team="team"
+            :team-state="round.teamStates[i]"
+          />
+        </div>
+      </div>
+    </Transition>
+  </div>
+</template>
