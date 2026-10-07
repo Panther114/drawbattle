@@ -7,7 +7,6 @@ import { track } from '../analytics.js';
 import { takeJoinError } from '../nav.js';
 import { safeStorage } from '../storage.js';
 import Btn from '../components/Btn.vue';
-import Footer from '../components/Footer.vue';
 import HomeMarketing from '../components/HomeMarketing.vue';
 import HomeWordPackUnit from '../components/HomeWordPackUnit.vue';
 
@@ -107,6 +106,11 @@ async function joinGame() {
 
 <template>
   <div class="hm-root">
+    <nav class="hm-nav">
+      <router-link to="/lobbies" class="hm-nav-link">lobbies</router-link>
+      <router-link to="/wordpacks" class="hm-nav-link">word pack editor</router-link>
+      <a href="https://github.com/Panther114/drawbattle" target="_blank" rel="noreferrer" class="hm-nav-link">github</a>
+    </nav>
     <div v-if="errorFromGame" class="hm-join-error-from-game">{{ errorText(errorFromGame.status, errorFromGame.gameId, errorFromGame.reason) }}</div>
     <div class="hm-title">
       <span class="hm-title-text">draw battle!<span class="hm-edition">Gavania edition</span></span>
@@ -162,10 +166,6 @@ async function joinGame() {
         </Btn>
       </form>
     </div>
-    <div class="hm-extra-row">
-      <Btn type="button" color="green" size="small" :force-rotation="-2" @click="router.push({ name: 'Lobbies' })">lobbies</Btn>
-      <router-link to="/wordpacks" class="hm-create-packs">word pack editor</router-link>
-    </div>
     <div class="hm-how-header">how to play</div>
     <div class="hm-how">
       <div class="hm-how-row">
@@ -181,6 +181,5 @@ async function joinGame() {
         <div class="hm-how-text">replay the same words again in a frantic <span class="hm-nobr">final round</span></div>
       </div>
     </div>
-    <Footer />
   </div>
 </template>
