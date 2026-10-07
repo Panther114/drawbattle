@@ -4,6 +4,16 @@ A from-scratch clone of [drawbattle.io](https://drawbattle.io): a two-team drawi
 The client (Vue 3 + Vite) and the backend (Express + `ws`) were written from observation of the real site: its
 network protocol, timings and rules were recorded by playing real games against it with bots and then re-implemented.
 
+## screenshots
+
+| | |
+|---|---|
+| ![home](docs/screenshots/01-home.png) **home** | ![lobby](docs/screenshots/02-lobby.png) **lobby** |
+| ![word packs](docs/screenshots/03-word-packs.png) **word packs** | ![choose a word](docs/screenshots/04-choose-word.png) **choosing a word** |
+| ![drawing](docs/screenshots/05-drawing.png) **drawing & guessing** | ![round result](docs/screenshots/06-round-result.png) **round result** |
+| ![score](docs/screenshots/07-score.png) **score screen** | ![final drawdown](docs/screenshots/08-final-drawdown.png) **the final drawdown** |
+| ![summary](docs/screenshots/09-summary.png) **summary & recap** | |
+
 ## run
 
 ```bash
