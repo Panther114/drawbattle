@@ -70,7 +70,7 @@ onMounted(() => {
 <template>
   <div class="hm-marketing">
     <div class="hm-container">
-      <svg width="240" height="221" viewBox="0 0 193 178" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg width="288" height="265" viewBox="0 0 193 178" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path
           v-for="(d, i) in STROKES"
           :key="i"
