@@ -1404,22 +1404,6 @@ a:hover {
 .fb-submit {
   margin-top: 16px;
 }
-.footer-root {
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding-top: 64px;
-}
-.footer-divider {
-  color: var(--light-gray);
-  display: inline-block;
-  margin: 0 4px;
-}
-.footer-root a {
-  color: var(--gray);
-}
-
 /* modal */
 .modal-container {
   position: fixed;
@@ -2492,26 +2476,26 @@ a:hover {
   transform: scale(1);
 }
 .hm-guess1 {
-  left: 150%;
+  left: calc(100% + 20px);
   top: 14%;
   transform: rotate(-3deg);
 }
 .hm-guess2 {
-  right: 150%;
+  right: calc(100% + 20px);
   top: 6%;
   transform: rotate(7deg);
 }
 .hm-guess3 {
-  right: 130%;
+  right: calc(100% + 4px);
   top: 65%;
   transform: rotate(-2deg);
 }
 .hm-guess4 {
-  left: 130%;
+  left: calc(100% + 4px);
   top: 65%;
   transform: rotate(4deg);
 }
-@media (max-width: 840px) {
+@media (max-width: 1000px) {
   .hm-guess {
     display: none;
   }
@@ -2787,11 +2771,6 @@ a:hover {
 .mp-main {
   max-height: calc(100vh - 56px);
 }
-.footer-root {
-  padding-top: 12px;
-  padding-bottom: 8px;
-}
-
 /* home */
 .hm-root {
   padding: 36px 0 8px;
@@ -2805,7 +2784,7 @@ a:hover {
   margin-bottom: 20px;
 }
 .hm-new-game-wrapper {
-  margin-top: 40px;
+  margin-top: 60px;
 }
 .hm-how-header {
   margin-top: 28px;
@@ -2879,14 +2858,13 @@ a:hover {
     justify-content: center;
     align-items: start;
   }
-  .lobby-root.joined > .lobby-welcome,
-  .lobby-root.joined > .footer-root {
+  .lobby-root.joined > .lobby-welcome {
     grid-column: 1 / -1;
   }
   .lobby-root.joined > .lobby-name-form,
   .lobby-root.joined > .lobby-teams,
   .lobby-root.joined > .lobby-start-container,
-  .lobby-root.joined > div:not(.lobby-welcome):not(.footer-root):not(.st-table) {
+  .lobby-root.joined > div:not(.lobby-welcome):not(.st-table) {
     grid-column: 1;
   }
   .lobby-root.joined > .st-table {
@@ -3702,8 +3680,8 @@ a:hover {
   }
 }
 
-/* home: top-left navigation */
-.hm-nav {
+/* top-left navigation, shared by every page */
+.top-nav {
   position: fixed;
   top: 14px;
   left: 16px;
@@ -3713,7 +3691,7 @@ a:hover {
   align-items: flex-start;
   gap: 8px;
 }
-.hm-nav-link {
+.top-nav a {
   font-size: 16px;
   color: #101010;
   background: #ffffffa0;
@@ -3725,21 +3703,27 @@ a:hover {
     border-color 0.2s,
     background 0.2s;
 }
-.hm-nav-link:hover {
+.top-nav a:hover {
   text-decoration: none;
   transform: translateX(4px) rotate(-1.5deg) scale(1.05);
   border-color: var(--darkblue);
   background: var(--blue);
 }
-.hm-nav-link:active {
+.top-nav a:active {
   transform: scale(0.96);
 }
 @media (max-width: 800px) {
-  .hm-nav {
+  .top-nav {
     position: static;
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;
     margin-bottom: 18px;
+  }
+}
+
+@media (max-width: 600px) {
+  .hm-new-game-wrapper {
+    margin-top: 32px;
   }
 }

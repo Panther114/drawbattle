@@ -3,7 +3,7 @@ import { onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { API } from '../wordpacks.js';
 import Btn from '../components/Btn.vue';
-import Footer from '../components/Footer.vue';
+import TopNav from '../components/TopNav.vue';
 
 const router = useRouter();
 const lobbies = ref([]);
@@ -54,6 +54,7 @@ const spectate = (l) => router.push({ name: 'Game', params: { gameId: l.id.toUpp
 
 <template>
   <div class="lb-root">
+    <TopNav><router-link to="/">back to home</router-link></TopNav>
     <div class="lb-title">lobbies</div>
     <div class="lb-sub">every open game right now. hop in, or watch from the sidelines</div>
     <div v-if="failed" class="lb-note lb-error">couldn't reach the server, retrying...</div>
@@ -95,7 +96,5 @@ const spectate = (l) => router.push({ name: 'Game', params: { gameId: l.id.toUpp
         </div>
       </div>
     </TransitionGroup>
-    <router-link to="/" class="lb-back">back to home</router-link>
-    <Footer />
   </div>
 </template>

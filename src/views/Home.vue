@@ -7,6 +7,7 @@ import { track } from '../analytics.js';
 import { takeJoinError } from '../nav.js';
 import { safeStorage } from '../storage.js';
 import Btn from '../components/Btn.vue';
+import TopNav from '../components/TopNav.vue';
 import HomeMarketing from '../components/HomeMarketing.vue';
 import HomeWordPackUnit from '../components/HomeWordPackUnit.vue';
 
@@ -106,11 +107,10 @@ async function joinGame() {
 
 <template>
   <div class="hm-root">
-    <nav class="hm-nav">
-      <router-link to="/lobbies" class="hm-nav-link">lobbies</router-link>
-      <router-link to="/wordpacks" class="hm-nav-link">word pack editor</router-link>
-      <a href="https://github.com/Panther114/drawbattle" target="_blank" rel="noreferrer" class="hm-nav-link">github</a>
-    </nav>
+    <TopNav>
+      <router-link to="/lobbies">lobbies</router-link>
+      <router-link to="/wordpacks">word pack editor</router-link>
+    </TopNav>
     <div v-if="errorFromGame" class="hm-join-error-from-game">{{ errorText(errorFromGame.status, errorFromGame.gameId, errorFromGame.reason) }}</div>
     <div class="hm-title">
       <span class="hm-title-text">draw battle!<span class="hm-edition">Gavania edition</span></span>

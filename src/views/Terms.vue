@@ -1,4 +1,5 @@
 <script setup>
+import TopNav from '../components/TopNav.vue';
 const terms = [
   [
     '1. Introduction and accepting the terms',
@@ -67,6 +68,7 @@ const privacy = [
 
 <template>
   <div class="tos-root">
+    <TopNav><router-link to="/">back to home</router-link></TopNav>
     <div>
       <h2 class="tos-header">Terms of Service</h2>
       <div v-for="(s, i) in terms" :key="i">

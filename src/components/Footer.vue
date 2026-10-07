@@ -1,5 +1,7 @@
+<script setup>
+import TopNav from './TopNav.vue';
+</script>
+
 <template>
-  <div class="footer-root">
-    <a href="https://github.com/Panther114/drawbattle" target="_blank" rel="noreferrer">github</a>
-  </div>
+  <TopNav />
 </template>
