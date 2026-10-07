@@ -40,9 +40,6 @@ function clickTab(name) {
   tab.value = name;
   track('click word pack modal tab', { 'game id': props.gameId, tab: name });
 }
-function clickDiscord() {
-  track('click word pack discord link', { 'game id': props.gameId });
-}
 </script>
 
 <template>
@@ -75,10 +72,6 @@ function clickDiscord() {
             </div>
             <button v-else class="wp-custom-button" @click="openCustom">enter a custom word pack id</button>
           </div>
-          <div>
-            browse 100+ more packs or make your own in our
-            <a href="https://discord.gg/gWsU2uAfY9" target="_blank" rel="noreferrer" class="wp-discord-link" @click="clickDiscord">discord</a>
-          </div>
         </div>
         <div v-if="communityIds !== undefined">
           <WordListSelectorItem
@@ -87,10 +80,6 @@ function clickDiscord() {
             :word-list-id="id"
             @select-list="emit('select-list', id)"
           />
-        </div>
-        <div class="wp-custom-text">
-          find 100+ more community packs in the
-          <a href="https://discord.gg/gWsU2uAfY9" target="_blank" rel="noreferrer" class="wp-discord-link" @click="clickDiscord">word packs channel</a>
         </div>
       </div>
     </div>

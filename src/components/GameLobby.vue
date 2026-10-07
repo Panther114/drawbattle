@@ -95,7 +95,7 @@ const startDisabled = computed(
 </script>
 
 <template>
-  <div class="lobby-root">
+  <div class="lobby-root" :class="{ joined: isConnected }">
     <div v-if="connectedApp !== undefined" class="lobby-welcome">
       <div class="lobby-welcome-header">welcome to drawbattle.io!</div>
       <div class="lobby-welcome-tagline">two teams of drawers face off with a frantic final round</div>

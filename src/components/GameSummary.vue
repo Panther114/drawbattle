@@ -27,8 +27,6 @@ const stage = ref(Stage.Score);
 const wordIndex = ref(0);
 const showGuesses = ref(false);
 const finalRound = computed(() => props.game.finalRound);
-// the donation card is tilted a random amount
-const donationTilt = Math.round(1000 * (0.25 - 0.75 * Math.random())) / 1000;
 let trackedGuesses = false;
 const timers = [];
 const later = (fn, ms) => timers.push(setTimeout(fn, ms));
@@ -154,28 +152,6 @@ void displayName;
 
     <Transition enter-from-class="sm-fade-enter-from" enter-active-class="sm-fade-enter-active">
       <div v-if="stage >= Stage.Recap" class="sm-recap">
-        <div class="sm-donation" :style="{ transform: `rotate(${donationTilt}deg)` }">
-          <div>we rely on donations to keep draw battle running, so we'd really appreciate your support 🙏</div>
-          <a
-            href="https://buymeacoffee.com/drawbattle"
-            class="sm-coffee"
-            target="_blank"
-            rel="noreferrer"
-            @click="track('click buy coffee button', { 'game id': game.id, 'user id': userId })"
-          >
-            support draw battle
-          </a>
-          <div>browse word packs in our discord server and use the bot to make your own!</div>
-          <a
-            href="https://discord.gg/D6aHB4hRhK"
-            class="sm-discord"
-            target="_blank"
-            rel="noreferrer"
-            @click="track('click join discord button', { 'game id': game.id, 'user id': userId })"
-          >
-            join our discord
-          </a>
-        </div>
         <Btn v-if="showBackToLobby" class="sm-back-button" @click="backToLobby">back to lobby</Btn>
         <div class="sm-recap-header">
           <div class="sm-recap-label">game recap</div>

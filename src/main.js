@@ -9,7 +9,7 @@ import { tooltip } from './tooltip.js';
 import { loadOfficialPacks } from './wordpacks.js';
 import './style.css';
 
-const LIST_ALIASES = { discord: 874737, hades: 198903, taiwan: 170398, holidays: 332670, 2020: 796082 };
+const LIST_ALIASES = { hades: 198903, taiwan: 170398, holidays: 332670, 2020: 796082 };
 
 // vanity URLs that open the home page with a word pack preselected
 const packRoutes = [
