@@ -5,6 +5,7 @@ import { packs } from '../wordpacks.js';
 import { track } from '../analytics.js';
 import { safeStorage } from '../storage.js';
 import Btn from './Btn.vue';
+import Icon from './Icon.vue';
 import FishbowlPopulation from './FishbowlPopulation.vue';
 import Footer from './Footer.vue';
 import Settings from './Settings.vue';
@@ -87,7 +88,12 @@ function joinTeam(i) {
   lastJoin = [i, now];
 }
 const isFull = (t) => t.userIds.length >= rules.maxTeamSize;
-const needsPlayers = computed(() => props.teams.some((t) => t.userIds.length < 2));
+const randomTeams = computed(() => props.gameSettings.randomTeams === true);
+// random teams: one list for everyone (the manual teams stay untouched underneath), drawn into two at the start
+const everyone = computed(() => props.teams.flatMap((t) => t.userIds));
+const needsPlayers = computed(() =>
+  randomTeams.value ? everyone.value.length < 4 : props.teams.some((t) => t.userIds.length < 2),
+);
 const starting = computed(() => props.startGameSecondsRemaining !== undefined);
 const startDisabled = computed(
   () =>
@@ -131,7 +137,18 @@ const startDisabled = computed(
     </form>
 
     <template v-if="isConnected">
-      <div class="lobby-teams">
+      <div v-if="randomTeams" class="lobby-teams random">
+        <div class="lobby-team">
+          <div class="lobby-team-name"><Icon name="shuffle" class="lobby-random-ic" />random teams</div>
+          <div class="lobby-team-line" />
+          <div v-for="uid in everyone" :key="uid" class="lobby-user" :class="{ submitted: fishbowlWords !== undefined && fishbowlWords[uid] !== undefined }">
+            <span v-if="uid === userId">{{ cleanName || 'anonymous' }} (you)<sup v-if="users[uid]" class="rating">{{ users[uid].rating }}</sup></span>
+            <Username v-else :user="users[uid]" />
+          </div>
+          <div class="lobby-random-note">two teams are drawn when the game starts</div>
+        </div>
+      </div>
+      <div v-else class="lobby-teams">
         <div v-for="(team, ti) in teams" :key="team.name" class="lobby-team">
           <div class="lobby-team-name">{{ team.name }}</div>
           <div class="lobby-team-line" />
@@ -141,7 +158,7 @@ const startDisabled = computed(
             class="lobby-user"
             :class="{ submitted: fishbowlWords !== undefined && fishbowlWords[uid] !== undefined }"
           >
-            <span v-if="uid === userId">{{ cleanName || 'anonymous' }} (you)</span>
+            <span v-if="uid === userId">{{ cleanName || 'anonymous' }} (you)<sup v-if="users[uid]" class="rating">{{ users[uid].rating }}</sup></span>
             <Username v-else :user="users[uid]" />
           </div>
           <Btn
@@ -172,7 +189,7 @@ const startDisabled = computed(
             {{ starting ? `starting in ${startGameSecondsRemaining}...` : 'start game!' }}
           </Btn>
           <div class="lobby-start-subtext">
-            <template v-if="needsPlayers">each team needs at least 2 players</template>
+            <template v-if="needsPlayers">{{ randomTeams ? 'random teams need at least 4 players' : 'each team needs at least 2 players' }}</template>
             <button v-if="!isSpectator && starting" class="lobby-cancel" @click="cancelStart">cancel</button>
           </div>
         </div>

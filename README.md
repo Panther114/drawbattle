@@ -15,7 +15,9 @@ The game is now 670% as fun.
 | ![summary](docs/screenshots/09-summary.png) **summary & recap** | ![rules](docs/screenshots/10-customize-rules.png) **customize rules** |
 | ![word pack editor](docs/screenshots/11-word-pack-creator.png) **word pack editor** | ![letter hints](docs/screenshots/12-letter-hints.png) **letter hints (custom rule)** |
 | ![dark mode](docs/screenshots/13-dark-mode.png) **dark mode** | ![chat and votes](docs/screenshots/14-chat-and-votes.png) **chat, vote kick and team switch requests** |
-| ![stats](docs/screenshots/15-stats.png) **my stats (local dashboard)** | ![mobile](docs/screenshots/16-mobile-home.png) ![mobile stats](docs/screenshots/17-mobile-stats.png) **made for phones too** |
+| ![stats](docs/screenshots/15-stats.png) **my stats and player score (local dashboard)** | ![mobile](docs/screenshots/16-mobile-home.png) ![mobile stats](docs/screenshots/17-mobile-stats.png) **made for phones too** |
+| ![score changes](docs/screenshots/18-score-changes.png) **player score changes after a match** | ![random teams](docs/screenshots/19-random-teams.png) **random teams** |
+| ![quick switch](docs/screenshots/20-quick-switch.png) **quick switch settings** | |
 
 ## customization (not in the original)
 
@@ -55,10 +57,56 @@ The **my stats** page (`/stats`) is a dashboard that lives entirely in your brow
 win rate, and your win rate as a drawer and as a guesser (rounds only; the final drawdown is not counted), plus your recent
 games. Nothing is sent to the server, and you can reset it at any time.
 
+### player score
+
+Everyone starts at **0** and the score can go negative. It lives in your browser only (localStorage); the server never
+calculates or stores it. Your current score is sent once when you join a game so everyone can see it as a small number next
+to your name, and it is frozen for the length of a match.
+
+* **every match shares out exactly +100 points** between all players: if one team gains 500 the other loses 400.
+* each round, the **first correct guesser of each team** and **each team's drawer** earn points for speed:
+  `full = 4 + 16 * (1 - time taken / round length)`. The team that guessed first gets 100 %, the other team 50 %, and nobody
+  else gets anything. Winning the game adds +50 (a draw +25) for every member of the winning side.
+* at the end of the match the raw points are pooled: `delta = (raw - average raw) + 100 / players - 0.02 * (your score - average score)`,
+  rounded so the whole numbers still add up to exactly 100. Quick guesses and good drawings decide who gains, and a
+  stronger player has to do more to gain the same.
+* points show up bottom left as they are earned; the summary screen lists everybody's change.
+* only the raw facts of each match are stored on your device (the last 200 matches), not scores. Change the coefficients in
+  `src/rating.js` and everybody's stored history is replayed with the new numbers the next time the page loads.
+
+### random teams
+
+Tick **random teams** in the lobby settings (next to *show word lengths* and *play the final drawdown*; off by default) and
+the two team columns turn into one list of players. When the game starts everyone is drawn into two teams (with an odd number
+the extra player lands on either side with equal chance). Your manual team choices are kept underneath, so switching the
+option off again, or cancelling the start countdown, puts everyone back where they were. Team switch requests are off in
+random games.
+
+### away and snooze icons
+
+A blue icon next to a name means that player is in another window or tab; a sleepy purple face means they have *quick switch*
+open. Players who are fully disconnected still get the red icon. Only changes are sent (a few bytes), so there is no
+extra load while a game is running.
+
+### quick switch
+
+The **quick switch** page (top left of every page, between *my stats* and *github*) picks a page to show instantly in a game:
+a website (default `https://chat.deepseek.com`, any https link works) or a local `.html` / `.pdf` file. The page is loaded in
+the background as soon as you are in a game, and then shown or hidden with:
+
+* the **Tab** key, the **`** key, or the **extra mouse buttons** (back / forward). Inside a game these keys are taken over so they
+  do not move focus or leave the page; each one can be switched off, as can the whole feature.
+* phones get a small on-screen button next to the sound toggle instead.
+
+Everything stays on your device: the settings are in localStorage and a chosen file is kept in your browser's IndexedDB.
+Notes: some websites forbid being shown inside another page, so there is a **pop-up window** mode that opens it in its own
+screen-sized window; and a website you click into receives the keyboard itself, so after that use the small bolt button in the
+top corner (or click back on the game) to return. Local `.html` files get a small helper so the hotkeys keep working inside them.
+
 ### dark mode
 
-Every page has a **dark mode** toggle (top left, or the corner of a game). It follows your system setting until you pick one,
-and remembers your choice. The drawing canvas always stays white.
+Every page has a **dark mode** toggle (top left, or the corner of a game). Light is the default; your choice is remembered.
+The drawing canvas always stays white.
 
 ### game codes and lobbies
 
@@ -104,9 +152,11 @@ Everything is served by one Node process: the client, the REST API under `/api` 
 
 ```
 server/index.js        REST + websocket entry point
-server/game.js         game engine (lobby, rounds, scoring rules, final round)
+server/game.js         game engine (lobby, rounds, scoring rules, final round, random teams, presence)
 server/wordpacks.js    word packs (+ txt files)
 src/                   Vue client (views, components, shared rules in shared.js)
+src/rating.js          player score maths and its local history
+src/quickswitch.js     quick switch settings, hotkeys and the stored file
 scripts/               asset generators (icons, sounds)
 ```
 

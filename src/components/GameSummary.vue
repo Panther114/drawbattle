@@ -7,6 +7,8 @@ import { API } from '../wordpacks.js';
 import { track } from '../analytics.js';
 import { nav } from '../nav.js';
 import Btn from './Btn.vue';
+import Icon from './Icon.vue';
+import { buildFacts, computeMatch, formatDelta } from '../rating.js';
 import Footer from './Footer.vue';
 import TeamBoard from './TeamBoard.vue';
 import { displayName } from '../shared.js';
@@ -133,6 +135,26 @@ const startTimeFor = (original, teamIdx, roundIdx) => {
   );
 };
 void displayName;
+
+// everyone's score change for this match, worked out the same way on every device
+const scoreRows = computed(() => {
+  try {
+    if (props.game.previousRounds.length === 0) return [];
+    const table = computeMatch(buildFacts(props.game, 'summary'));
+    return Object.entries(table)
+      .map(([id, r]) => ({ id, name: displayName(props.game.users[id] ?? {}), team: props.game.teams.findIndex((t) => t.userIds.includes(id)), ...r }))
+      .sort((a, b) => b.delta - a.delta || (a.id < b.id ? -1 : 1));
+  } catch {
+    return [];
+  }
+});
+const why = (r) => {
+  const parts = [];
+  if (r.guess) parts.push(`guesses ${Math.round(r.guess)}`);
+  if (r.draw) parts.push(`drawing ${Math.round(r.draw)}`);
+  if (r.result) parts.push(`result ${r.result}`);
+  return parts.length ? parts.join(' · ') : 'no points earned';
+};
 </script>
 
 <template>
@@ -153,6 +175,20 @@ void displayName;
           <div v-for="id in winningTeam.userIds" :key="id" class="sm-winning-user">
             {{ displayName(game.users[id]) }}
           </div>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition enter-from-class="sm-fade-enter-from" enter-active-class="sm-fade-enter-active">
+      <div v-if="stage >= Stage.Winner && scoreRows.length" class="sm-scores">
+        <div class="sm-scores-title"><Icon name="trophy" class="sm-scores-ic" />score changes</div>
+        <div class="sm-scores-note">every match shares out +100 points between the players, so a gain for one is a loss for another</div>
+        <div v-for="r in scoreRows" :key="r.id" class="sm-score-row" :class="{ me: r.id === userId }">
+          <span class="sm-score-dot" :class="'t' + r.team" />
+          <span class="sm-score-name">{{ r.name }}<em v-if="r.id === userId"> (you)</em></span>
+          <span class="sm-score-why">{{ why(r) }}</span>
+          <span class="sm-score-old">{{ r.r0 }} → {{ r.r0 + r.delta }}</span>
+          <span class="sm-score-delta" :class="r.delta > 0 ? 'up' : r.delta < 0 ? 'down' : ''">{{ formatDelta(r.delta) }}</span>
         </div>
       </div>
     </Transition>

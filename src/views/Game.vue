@@ -10,8 +10,10 @@ import {
   RoundStage,
   S,
   Sound,
+  UserPresence,
   UserStatus,
   bothGuessedTime,
+  drawingStartTime,
   finalRoundWinner,
   guessMatches,
   isGameEnded,
@@ -30,11 +32,16 @@ import { playSound } from '../audio.js';
 import { ReconnectingSocket } from '../socket.js';
 import { safeStorage } from '../storage.js';
 import { recordGame, recordRound } from '../stats.js';
+import { buildFacts, creditFor, recordMatch, score } from '../rating.js';
+import { presence, trackPresence } from '../presence.js';
+import { qs, setArmed, toggleQuick } from '../quickswitch.js';
+import Icon from '../components/Icon.vue';
 import AudioPreloader from '../components/AudioPreloader.vue';
 import GameFinalRound from '../components/GameFinalRound.vue';
 import GameChat from '../components/GameChat.vue';
 import GameJoinAsDisconnectedUser from '../components/GameJoinAsDisconnectedUser.vue';
 import GameLobby from '../components/GameLobby.vue';
+import GameToasts from '../components/GameToasts.vue';
 import GameRound from '../components/GameRound.vue';
 import GameScore from '../components/GameScore.vue';
 import GameSummary from '../components/GameSummary.vue';
@@ -252,6 +259,8 @@ function onMessage(e) {
       connStatus.value = Conn.Connected;
       wasLive = true;
       clockOffset.value = Date.now() - serverNow;
+      lastAwardKey = award.value?.key; // a reconnect must not pay out a guess again
+      if (presence.value !== UserPresence.Active && !isSpectator.value) socket?.send(JSON.stringify([C.Presence, presence.value]));
       break;
     }
     case S.JoinGame:
@@ -264,7 +273,10 @@ function onMessage(e) {
     case S.UserDisconnect:
       if (g !== undefined) {
         const [, id] = m;
-        if (g.users[id]) g.users[id].status = UserStatus.Disconnected;
+        if (g.users[id]) {
+          g.users[id].status = UserStatus.Disconnected;
+          delete g.users[id].presence;
+        }
         if (g.currentRound !== undefined) {
           const idx = g.previousRounds.length;
           if (readyUserIds.value[idx] !== undefined) readyUserIds.value[idx].delete(id);
@@ -397,6 +409,12 @@ function onMessage(e) {
     case S.UpdateFishbowlWords:
       if (g !== undefined) g.fishbowlWords = m[1];
       break;
+    case S.Presence:
+      if (g !== undefined && g.users[m[1]]) {
+        if (m[2]) g.users[m[1]].presence = m[2];
+        else delete g.users[m[1]].presence;
+      }
+      break;
     case S.Chat:
       if (g !== undefined) {
         if (!g.chat) g.chat = [];
@@ -474,6 +492,7 @@ function connect(status, name) {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const q = new URLSearchParams({ gameId: gameId.value, userId: userId.value });
   if (name !== undefined) q.set('userName', name);
+  q.set('rating', String(score.rating)); // my own score, kept on this device
   if (isSpectator.value) q.set('spectate', 'true');
   socket = new ReconnectingSocket({ url: `${proto}//${window.location.host}/ws/?${q}`, onMessage });
   if (pingTimer !== undefined) clearInterval(pingTimer);
@@ -575,7 +594,41 @@ function recordFinish() {
   const mine = totals[teamIndex.value];
   const theirs = totals[1 - teamIndex.value];
   recordGame(gameKey.value, mine > theirs ? 'win' : mine < theirs ? 'loss' : 'draw', mine, theirs);
+  recordMatch(buildFacts(g, gameKey.value), userId.value);
 }
+
+// ---- my score: points show up as they are earned (the final table at the end shares out the pot) ----
+const toasts = ref([]);
+let toastSeq = 0;
+let lastAwardKey;
+const award = computed(() => {
+  const r = currentRound.value;
+  const g = game.value;
+  const ti = teamIndex.value;
+  if (!r || !g || r.word === undefined || ti < 0 || isSpectator.value || !wasLive) return undefined;
+  const mine = findCorrectGuess(r.teamStates[ti].guesses, r.word);
+  if (!mine) return undefined;
+  const drawing = r.teamStates[ti].drawerId === userId.value;
+  if (!drawing && mine.userId !== userId.value) return undefined;
+  const other = findCorrectGuess(r.teamStates[1 - ti].guesses, r.word);
+  const rank = other && other.timestamp < mine.timestamp ? 2 : 1;
+  const s = 1 - (mine.timestamp - drawingStartTime(r, ti)) / 1000 / Math.max(1, g.settings.roundLengthSec);
+  return { key: g.previousRounds.length, drawing, rank, pts: Math.round(creditFor(rank, s)) };
+});
+watch(award, (a) => {
+  if (!a || a.key === lastAwardKey) return;
+  lastAwardKey = a.key;
+  const id = ++toastSeq;
+  const text = a.drawing ? 'your team guessed your drawing' : 'you guessed it';
+  toasts.value.push({ id, pts: a.pts, second: a.rank === 2, text: a.rank === 2 ? `${text} (second)` : text });
+  setTimeout(() => {
+    toasts.value = toasts.value.filter((t) => t.id !== id);
+  }, 3200);
+});
+// tell the others when I switch windows / open Quick Switch
+watch(presence, (p) => {
+  if (!isSpectator.value && connStatus.value === Conn.Connected) socket?.send(JSON.stringify([C.Presence, p]));
+});
 
 watch(finalStage, (s) => {
   if (s?.stage !== undefined && s.stage !== FinalRoundStage.SummaryScreen) showBackToLobby.value = true;
@@ -591,6 +644,8 @@ watch(finalStage, (s) => {
 });
 
 onMounted(async () => {
+  setArmed(true);
+  trackPresence();
   if (props.summaryUrl !== undefined) {
     const res = await fetch(props.summaryUrl);
     game.value = await res.json();
@@ -610,6 +665,7 @@ onMounted(async () => {
   }, 100);
 });
 onUnmounted(() => {
+  setArmed(false);
   teardown();
   if (tickTimer !== undefined) clearInterval(tickTimer);
 });
@@ -651,6 +707,7 @@ watch(view, (v) => {
           <SoundToggle class="sound-toggle-pos" :enabled="soundsEnabled" @toggle="soundsEnabled = !soundsEnabled" />
         </template>
         <ThemeToggle class="sound-toggle-pos" />
+        <button v-if="qs.enabled" v-tooltip="'quick switch'" class="qs-trigger" aria-label="quick switch" @click="toggleQuick"><Icon name="bolt" /></button>
       </div>
     </div>
 
@@ -762,6 +819,7 @@ watch(view, (v) => {
       :between-rounds="view === 'score'"
       @client-message="send"
     />
+    <GameToasts :items="toasts" />
     <AudioPreloader v-if="!isIOS()" />
   </div>
 </template>

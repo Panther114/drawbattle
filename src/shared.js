@@ -85,6 +85,8 @@ export function sanitizeName(raw) {
 
 // ---- enums ----
 export const UserStatus = { Connected: 1, Disconnected: 2, Kicked: 3 };
+// what a connected player is up to: here, in another window, or behind Quick Switch
+export const UserPresence = { Active: 0, Away: 1, Snooze: 2 };
 
 export const RoundStage = {
   ChooseWord: 0,
@@ -153,6 +155,7 @@ export const S = {
   DrawerRotated: 23,
   SwitchAppeals: 24,
   GameOver: 25,
+  Presence: 26,
   ServerError: 300,
   ForceRefresh: 301,
 };
@@ -174,6 +177,7 @@ export const C = {
   VoteKick: 113,
   SwitchAppeal: 114,
   SwitchVote: 115,
+  Presence: 116,
 };
 
 // canvas operations

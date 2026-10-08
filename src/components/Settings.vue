@@ -27,6 +27,7 @@ const wordListId = ref(initialPack);
 const showWordLength = ref(!props.gameSettings.hideWordLength);
 const streamerMode = ref(props.gameSettings.streamerMode);
 const finalDrawdown = ref(props.gameSettings.finalDrawdown !== false);
+const randomTeams = ref(props.gameSettings.randomTeams === true);
 const copied = ref(false);
 const modalOpen = ref(false);
 const rulesOpen = ref(false);
@@ -56,6 +57,7 @@ const current = () => ({
   hideWordLength: !showWordLength.value,
   streamerMode: streamerMode.value,
   finalDrawdown: finalDrawdown.value,
+  randomTeams: randomTeams.value,
 });
 
 function changeRounds(e) {
@@ -89,6 +91,12 @@ function changeFinal(e) {
   track('change game setting', { 'game id': props.gameId, key: 'finalDrawdown', value: v });
   finalDrawdown.value = v;
   send({ ...current(), finalDrawdown: v });
+}
+function changeRandom(e) {
+  const v = e.target.checked;
+  track('change game setting', { 'game id': props.gameId, key: 'randomTeams', value: v });
+  randomTeams.value = v;
+  send({ ...current(), randomTeams: v });
 }
 function changeStreamer(e) {
   const v = e.target.checked;
@@ -134,6 +142,7 @@ watch(
     showWordLength.value = !s.hideWordLength;
     streamerMode.value = s.streamerMode;
     finalDrawdown.value = s.finalDrawdown !== false;
+    randomTeams.value = s.randomTeams === true;
   },
 );
 // keep the round count legal whenever the pack changes
@@ -250,6 +259,10 @@ const listIds = computed(() => {
           <div class="st-item">
             <label for="finalDrawdown" class="st-checkbox-label">play the final drawdown</label>
             <input id="finalDrawdown" type="checkbox" :checked="finalDrawdown" :disabled="disabled" @change="changeFinal" />
+          </div>
+          <div class="st-item">
+            <label for="randomTeams" class="st-checkbox-label">random teams</label>
+            <input id="randomTeams" type="checkbox" :checked="randomTeams" :disabled="disabled" @change="changeRandom" />
           </div>
           <div class="st-item">
             <button class="st-rules-button" @click="rulesOpen = true">customize rules...</button>

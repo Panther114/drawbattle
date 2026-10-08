@@ -1,10 +1,21 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { resetStats, stats, summarize } from '../stats.js';
+import { formatDelta, resetScore, score } from '../rating.js';
 import Icon from '../components/Icon.vue';
 import TopNav from '../components/TopNav.vue';
 
 const s = computed(() => summarize(stats.games));
+const last = computed(() => score.history[score.history.length - 1]);
+// the rating after each of the last 20 matches as a small line
+const spark = computed(() => {
+  const pts = [0, ...score.history.slice(-20).map((h) => h.rating)];
+  if (pts.length < 2) return '';
+  const lo = Math.min(...pts);
+  const hi = Math.max(...pts);
+  const span = Math.max(1, hi - lo);
+  return pts.map((v, i) => `${((i / (pts.length - 1)) * 100).toFixed(1)},${(36 - ((v - lo) / span) * 32).toFixed(1)}`).join(' ');
+});
 const confirming = ref(false);
 const pct = (v) => (v === undefined ? '–' : `${v}%`);
 const when = (t) => new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -17,6 +28,7 @@ function reset() {
     return;
   }
   resetStats();
+  resetScore();
   confirming.value = false;
 }
 </script>
@@ -28,6 +40,15 @@ function reset() {
     <div class="stt-sub">kept only in this browser. nothing is sent to the server</div>
 
     <div class="stt-cards">
+      <div class="stt-card score">
+        <div class="stt-label"><Icon name="trophy" class="stt-ic c-purple" />player score</div>
+        <div class="stt-big" :class="{ neg: score.rating < 0 }">{{ score.rating }}</div>
+        <div class="stt-note">
+          <template v-if="last">last game {{ formatDelta(last.delta) }} · {{ score.history.length }} counted</template>
+          <template v-else>everyone starts at 0</template>
+        </div>
+        <svg v-if="spark" class="stt-spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><polyline :points="spark" vector-effect="non-scaling-stroke" /></svg>
+      </div>
       <div class="stt-card">
         <div class="stt-label"><Icon name="list" class="stt-ic c-blue" />games played</div>
         <div class="stt-big">{{ s.played }}</div>
@@ -65,7 +86,8 @@ function reset() {
 
     <div class="stt-foot">
       <p>a round counts as a win when your team guessed the word first. the final drawdown is not counted in the drawer / guesser rates.</p>
-      <button v-if="stats.games.length" class="stt-reset" @click="reset"><Icon name="trash" />{{ confirming ? 'click again to erase' : 'reset my stats' }}</button>
+      <p>player score: every match shares out +100 points. you earn points for fast first guesses and quick drawings, plus a bonus for winning, and you give up the average of the lobby.</p>
+      <button v-if="stats.games.length || score.history.length" class="stt-reset" @click="reset"><Icon name="trash" />{{ confirming ? 'click again to erase' : 'reset my stats' }}</button>
     </div>
   </div>
 </template>

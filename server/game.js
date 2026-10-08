@@ -25,6 +25,7 @@ export const S = {
   DrawerRotated: 23,
   SwitchAppeals: 24,
   GameOver: 25,
+  Presence: 26,
   ServerError: 300,
   ForceRefresh: 301,
 };
@@ -46,6 +47,7 @@ export const C = {
   VoteKick: 113,
   SwitchAppeal: 114,
   SwitchVote: 115,
+  Presence: 116,
 };
 
 export const Status = { Connected: 1, Disconnected: 2, Kicked: 3 };
@@ -100,6 +102,16 @@ const CHAT_HISTORY = 80;
 const CHAT_BURST = 5; // messages allowed per CHAT_WINDOW_MS per player
 const CHAT_WINDOW_MS = 8000;
 const MIN_VOTE_PLAYERS = 3; // a vote kick needs at least this many active players
+const MIN_RANDOM_PLAYERS = 4; // random teams need 2 + 2
+const PRESENCE_BURST = 8; // presence changes allowed per PRESENCE_WINDOW_MS per player
+const PRESENCE_WINDOW_MS = 10000;
+const MAX_RATING = 99999;
+
+// the score a client reports about itself (it is stored on the player's own device); anything odd counts as 0
+export function sanitizeRating(raw) {
+  const n = Math.round(Number(raw));
+  return Number.isFinite(n) ? Math.max(-MAX_RATING, Math.min(MAX_RATING, n)) : 0;
+}
 
 // strictly more than half
 export const voteThreshold = (voters) => Math.floor(voters / 2) + 1;
@@ -243,6 +255,8 @@ export class Game {
     this.chat = [];
     this.chatSeq = 0;
     this.chatLog = new Map(); // userId -> recent send times (rate limit)
+    this.presenceLog = new Map(); // userId -> recent presence change times (rate limit)
+    this.preShuffleTeams = undefined; // manual teams saved while a random-teams countdown runs
     this.banned = new Set(); // vote-kicked user ids
     this.kickVotes = new Map(); // targetId -> Set<voterId>
     this.switchAppeals = new Map(); // appellantId -> Set<voterId>
@@ -391,7 +405,7 @@ export class Game {
   }
 
   // ---------- connections ----------
-  connect(ws, { userId, userName, spectate }) {
+  connect(ws, { userId, userName, spectate, rating }) {
     this.touch();
     ws.gameCtx = { userId, spectate: !!spectate };
     if (spectate && !this.rule('allowSpectators')) {
@@ -418,6 +432,7 @@ export class Game {
     }
     if (existing) {
       if (userName !== undefined && !this.started) existing.name = userName;
+      if (rating !== undefined && !this.started) existing.rating = sanitizeRating(rating);
       const wasDisconnected = existing.status === Status.Disconnected;
       existing.status = Status.Connected;
       this.addSocket(userId, ws);
@@ -438,7 +453,8 @@ export class Game {
       return;
     }
     // new user joins the smaller team (ties -> team 1)
-    const user = { id: userId, name: userName, status: Status.Connected };
+    // rating: the player's own score, kept on their device; it is frozen once the game has started
+    const user = { id: userId, name: userName, status: Status.Connected, rating: sanitizeRating(rating) };
     this.users[userId] = user;
     let ti = this.teams[0].userIds.length <= this.teams[1].userIds.length ? 0 : 1;
     if (this.teams[ti].userIds.length >= this.rule('maxTeamSize')) ti = 1 - ti;
@@ -479,6 +495,7 @@ export class Game {
       this.removeFromLobby(ctx.userId);
     } else {
       user.status = Status.Disconnected;
+      delete user.presence;
       this.broadcast([S.UserDisconnect, ctx.userId]);
       this.recheckVotes();
       this.maybeAdvance();
@@ -536,6 +553,8 @@ export class Game {
         return this.onSwitchAppeal(userId);
       case C.SwitchVote:
         return this.onSwitchVote(userId, msg[1]);
+      case C.Presence:
+        return this.onPresence(userId, msg[1]);
       default:
         return;
     }
@@ -550,6 +569,21 @@ export class Game {
       else if (cur >= 0) this.teams[cur].userIds.push(userId);
     }
     this.broadcast([S.UpdateTeams, this.teams]);
+  }
+
+  // 0 = active, 1 = window not focused, 2 = quick switch open. Only changes are relayed, and only a few per window.
+  onPresence(userId, state) {
+    const user = this.users[userId];
+    if (!user || (state !== 0 && state !== 1 && state !== 2)) return;
+    if ((user.presence || 0) === state) return;
+    const now = Date.now();
+    const log = (this.presenceLog.get(userId) || []).filter((t) => now - t < PRESENCE_WINDOW_MS);
+    if (log.length >= PRESENCE_BURST) return;
+    log.push(now);
+    this.presenceLog.set(userId, log);
+    if (state === 0) delete user.presence;
+    else user.presence = state;
+    this.broadcast([S.Presence, userId, state]);
   }
 
   onUpdateName(userId, name) {
@@ -639,7 +673,7 @@ export class Game {
     const ti = this.teamIndexOf(targetId);
     if (!target || ti < 0) return;
     if (this.teamIndexOf(userId) < 0 || this.users[userId].status !== Status.Connected) return;
-    if (this.teams[ti].userIds.length < 3) return; // a team must keep at least 2 players
+    if (!this.canLoseMember(ti)) return;
     if (this.activeCount < MIN_VOTE_PLAYERS) return;
     let votes = this.kickVotes.get(targetId);
     if (!votes) this.kickVotes.set(targetId, (votes = new Set()));
@@ -648,6 +682,12 @@ export class Game {
     if (votes.size === 0) this.kickVotes.delete(targetId);
     this.broadcastVotes();
     this.recheckVotes(true);
+  }
+
+  // a team must keep at least 2 players; in a random-teams lobby only the total counts (teams are drawn at the start)
+  canLoseMember(ti) {
+    if (!this.started && this.settings.randomTeams === true) return this.userCount > MIN_RANDOM_PLAYERS;
+    return this.teams[ti].userIds.length >= 3;
   }
 
   // more than half of the other active players must agree
@@ -767,6 +807,7 @@ export class Game {
   canSwitch(userId) {
     const ti = this.teamIndexOf(userId);
     if (ti < 0 || !this.users[userId] || this.users[userId].status !== Status.Connected) return false;
+    if (this.settings.randomTeams === true) return false; // teams are drawn at random, nobody picks one
     if (this.teamActiveCount(ti) <= 2) return false;
     if (this.teams[1 - ti].userIds.length >= this.rule('maxTeamSize')) return false;
     return this.votersFor(userId).length >= 2;
@@ -809,6 +850,7 @@ export class Game {
       const v = Math.round(Number(next[k]));
       next[k] = Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : this.settings[k];
     }
+    next.randomTeams = next.randomTeams === true;
     this.settings = next;
     this.broadcast([S.UpdateSettings, this.settings]);
   }
@@ -816,8 +858,40 @@ export class Game {
   // ---------- starting ----------
   canStart() {
     if (this.started) return false;
+    if (this.settings.randomTeams === true) return this.userCount >= MIN_RANDOM_PLAYERS;
     if (this.teams.some((t) => t.userIds.length < 2)) return false;
     return true;
+  }
+
+  // random teams: everyone is drawn into two teams; with an odd number a coin flip decides which team is bigger.
+  // The manual teams are kept aside so cancelling the countdown puts everyone back exactly where they were.
+  shuffleTeams() {
+    this.preShuffleTeams = this.teams.map((t) => [...t.userIds]);
+    const ids = shuffle(this.teams.flatMap((t) => t.userIds));
+    const half = Math.floor(ids.length / 2);
+    const extra = ids.length % 2 === 1 && Math.random() < 0.5 ? 1 : 0;
+    const cut = half + extra;
+    this.teams[0].userIds = ids.slice(0, cut);
+    this.teams[1].userIds = ids.slice(cut);
+    this.broadcast([S.UpdateTeams, this.teams]);
+  }
+  restoreTeams() {
+    const pre = this.preShuffleTeams;
+    this.preShuffleTeams = undefined;
+    if (!pre) return;
+    const current = new Set(this.teams.flatMap((t) => t.userIds));
+    const placed = new Set();
+    this.teams.forEach((t, i) => {
+      t.userIds = pre[i].filter((id) => current.has(id));
+      t.userIds.forEach((id) => placed.add(id));
+    });
+    // players who arrived during the countdown join the smaller team
+    for (const id of current) {
+      if (placed.has(id)) continue;
+      const small = this.teams[0].userIds.length <= this.teams[1].userIds.length ? 0 : 1;
+      this.teams[small].userIds.push(id);
+    }
+    this.broadcast([S.UpdateTeams, this.teams]);
   }
 
   // the pack's words after the single-word / length filters (ignored if too few words would remain)
@@ -837,6 +911,7 @@ export class Game {
     this.availableWords = shuffle(words);
     this.usedWords = [];
     this.ready = new Set();
+    if (this.settings.randomTeams === true) this.shuffleTeams();
     const drawers = this.teams.map((t) => t.userIds[0]);
     const chooserTeam = Math.floor(Math.random() * this.teams.length);
     this.startRound(0, drawers, drawers[chooserTeam], 0, this.now() + this.rule('startCountdownSec') * 1000);
@@ -847,6 +922,7 @@ export class Game {
       this.clearChooserTimer();
       this.currentRound = undefined;
       this.usedWords = [];
+      this.restoreTeams();
     }
     this.broadcast([S.CancelStartGame]);
   }

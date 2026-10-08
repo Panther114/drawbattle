@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Game, C, S, Status, sanitizeName, voteThreshold, isStale, IDLE_MS, EMPTY_MS, LIVE_IDLE_MS } from './game.js';
+import { Game, C, S, Status, sanitizeRating, sanitizeName, voteThreshold, isStale, IDLE_MS, EMPTY_MS, LIVE_IDLE_MS } from './game.js';
 
 // ---- helpers ----
 class MockWs {
@@ -607,4 +607,108 @@ test('a lobby that is left by a vanished player is not listed once nobody is con
   w.close();
   assert.equal(g.activeCount, 0);
   assert.equal(g.userCount, 0);
+});
+
+// ---- player score on the server: only a clamped number is kept ----
+test('rating: reported by the client, clamped, frozen once the game starts', () => {
+  const g = makeGame();
+  const w = new MockWs(g);
+  g.connect(w, { userId: 'a1', userName: 'a1', rating: '250' });
+  assert.equal(g.users.a1.rating, 250);
+  assert.equal(sanitizeRating('abc'), 0);
+  assert.equal(sanitizeRating(1e12), 99999);
+  assert.equal(sanitizeRating(-1e12), -99999);
+  assert.equal(sanitizeRating('-40.6'), -41);
+  const ws = lobby(g, 3);
+  g.connect(new MockWs(g), { userId: 'a1', userName: 'a1', rating: 400 }); // lobby: can still change
+  assert.equal(g.users.a1.rating, 400);
+  startGame(g, ws);
+  g.connect(new MockWs(g), { userId: 'a1', userName: 'a1', rating: 9000 }); // started: frozen
+  assert.equal(g.users.a1.rating, 400);
+});
+
+// ---- presence ----
+test('presence: only changes are relayed, bad values and floods are ignored, disconnect resets', () => {
+  const g = makeGame();
+  const ws = lobby(g, 4);
+  startGame(g, ws);
+  const before = ws.p2.got(S.Presence).length;
+  send(g, ws.p1, C.Presence, 0); // already 0: nothing
+  send(g, ws.p1, C.Presence, 7);
+  send(g, ws.p1, C.Presence, 'x');
+  assert.equal(ws.p2.got(S.Presence).length, before);
+  send(g, ws.p1, C.Presence, 1);
+  assert.deepEqual(ws.p2.last(S.Presence), [S.Presence, 'p1', 1]);
+  assert.equal(g.users.p1.presence, 1);
+  send(g, ws.p1, C.Presence, 1); // same again: nothing
+  assert.equal(ws.p2.got(S.Presence).length, before + 1);
+  send(g, ws.p1, C.Presence, 2);
+  send(g, ws.p1, C.Presence, 0);
+  assert.equal(g.users.p1.presence, undefined);
+  for (let i = 0; i < 40; i++) send(g, ws.p1, C.Presence, i % 2 === 0 ? 1 : 2);
+  assert.ok(ws.p2.got(S.Presence).length <= before + 8, 'flooding is cut off');
+  ws.p1.close();
+  assert.equal(g.users.p1.presence, undefined);
+});
+
+// ---- random teams ----
+function randomLobby(n) {
+  const g = makeGame({ randomTeams: true });
+  const ws = lobby(g, n);
+  return { g, ws };
+}
+test('random teams: start needs 4 players and splits them evenly', () => {
+  const small = randomLobby(3);
+  assert.equal(small.g.canStart(), false);
+  const { g, ws } = randomLobby(6);
+  assert.ok(g.canStart());
+  startGame(g, ws);
+  assert.deepEqual([ids(g, 0).length, ids(g, 1).length], [3, 3]);
+  assert.equal(new Set([...ids(g, 0), ...ids(g, 1)]).size, 6);
+});
+test('random teams: with an odd number either team gets the extra player (fifty-fifty)', () => {
+  const big = [0, 0];
+  for (let i = 0; i < 400; i++) {
+    const { g, ws } = randomLobby(5);
+    startGame(g, ws);
+    const sizes = [ids(g, 0).length, ids(g, 1).length];
+    assert.deepEqual([...sizes].sort(), [2, 3]);
+    big[sizes[0] === 3 ? 0 : 1]++;
+    g.destroy();
+  }
+  assert.ok(big[0] > 140 && big[1] > 140, `got ${big}`);
+});
+test('random teams: the manual teams survive a toggle and a cancelled countdown', () => {
+  const g = makeGame();
+  const ws = lobby(g, 6);
+  send(g, ws.p1, C.JoinTeam, 1);
+  const manual = g.teams.map((t) => [...t.userIds]);
+  send(g, ws.p1, C.UpdateSettings, { ...g.settings, randomTeams: true });
+  assert.deepEqual(g.teams.map((t) => t.userIds), manual, 'toggling does not touch the teams');
+  send(g, ws.p1, C.UpdateSettings, { ...g.settings, randomTeams: false });
+  assert.deepEqual(g.teams.map((t) => t.userIds), manual);
+  send(g, ws.p1, C.UpdateSettings, { ...g.settings, randomTeams: true });
+  g.onStartGame();
+  assert.ok(g.inCountdown);
+  g.onCancelStart();
+  assert.deepEqual(g.teams.map((t) => [...t.userIds].sort()), manual.map((t) => [...t].sort()), 'cancel restores the manual teams');
+  assert.equal(g.settings.randomTeams, true);
+});
+test('random teams: the setting is a strict boolean and appeals are off', () => {
+  const g = makeGame();
+  const ws = lobby(g, 6);
+  send(g, ws.p1, C.UpdateSettings, { ...g.settings, randomTeams: 'yes' });
+  assert.equal(g.settings.randomTeams, false);
+  send(g, ws.p1, C.UpdateSettings, { ...g.settings, randomTeams: true });
+  startGame(g, ws);
+  toScoreScreen(g);
+  const mate = ids(g, 0)[0];
+  assert.equal(g.canSwitch(mate), false);
+});
+test('random teams: vote kick in the lobby only needs 5+ players in total', () => {
+  const g = makeGame({ randomTeams: true });
+  const ws = lobby(g, 5);
+  assert.ok(g.canLoseMember(0));
+  ws.p5.close();
+  assert.equal(g.canLoseMember(0), false);
 });

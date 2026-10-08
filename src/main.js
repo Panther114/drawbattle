@@ -8,6 +8,7 @@ import Debug from './views/Debug.vue';
 import WordPacks from './views/WordPacks.vue';
 import Lobbies from './views/Lobbies.vue';
 import Stats from './views/Stats.vue';
+import QuickSwitch from './views/QuickSwitch.vue';
 import { initTheme } from './theme.js';
 import { tooltip } from './tooltip.js';
 import { loadOfficialPacks } from './wordpacks.js';
@@ -25,6 +26,7 @@ const routes = [
   { path: '/wordpacks', name: 'WordPacks', component: WordPacks },
   { path: '/lobbies', name: 'Lobbies', component: Lobbies },
   { path: '/stats', name: 'Stats', component: Stats },
+  { path: '/quick-switch', name: 'QuickSwitch', component: QuickSwitch },
   { path: '/wordpack/:wordListId(\\d+)', name: 'Wordpack', component: Home, props: true },
   {
     path: '/:gameId([a-zA-Z]{4})',

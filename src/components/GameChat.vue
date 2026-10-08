@@ -100,18 +100,25 @@ function tally(votes, aboutId) {
 function kickInfo(id) {
   const t = tally(props.game.kickVotes?.[id], id);
   const ti = teamOf(id);
-  const possible = canVote.value && id !== props.userId && active.value.length >= 3 && ti >= 0 && teams.value[ti].userIds.length >= 3;
+  const enough = randomLobby.value ? teams.value.reduce((n, t) => n + t.userIds.length, 0) > 4 : ti >= 0 && teams.value[ti].userIds.length >= 3;
+  const possible = canVote.value && id !== props.userId && active.value.length >= 3 && ti >= 0 && enough;
   return { ...t, possible };
 }
 const kick = (id) => emit('client-message', [C.VoteKick, id]);
 
-const groups = computed(() =>
-  teams.value.map((t, ti) => ({
+// random teams: until the game starts everyone is listed together (the real teams are drawn at the start)
+const gameStarted = computed(() => props.game.currentRound !== undefined || props.game.finalRound !== undefined || props.game.ended === true);
+const randomLobby = computed(() => props.game.settings?.randomTeams === true && !gameStarted.value);
+const noSwitching = computed(() => props.game.settings?.randomTeams === true);
+const groups = computed(() => {
+  const list = teams.value.map((t, ti) => ({
     ti,
     name: t.name,
     members: t.userIds.map((id) => ({ id, user: users.value[id] })).filter((m) => m.user),
-  })),
-);
+  }));
+  if (!randomLobby.value) return list;
+  return [{ ti: 0, name: 'random teams', members: list.flatMap((g) => g.members) }];
+});
 const online = (user) => user.status === UserStatus.Connected;
 
 const myAppeal = computed(() => !!props.game.switchAppeals?.[props.userId]);
@@ -206,7 +213,7 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
           </div>
           <div v-for="m in g.members" :key="m.id" class="gp-row" :class="{ off: !online(m.user) }">
             <span class="gp-name">
-              {{ m.user.name || 'anonymous' }}<em v-if="m.id === userId"> (you)</em>
+              {{ m.user.name || 'anonymous' }}<em v-if="m.id === userId"> (you)</em><sup v-if="m.user.rating !== undefined" class="rating">{{ m.user.rating }}</sup>
               <span v-if="!online(m.user)" class="gp-off">offline</span>
             </span>
             <button
@@ -226,7 +233,7 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
           </div>
         </div>
 
-        <div v-if="!isSpectator" class="gp-switch">
+        <div v-if="!isSpectator && !noSwitching" class="gp-switch">
           <div class="gp-section-title"><Icon name="swap" class="gp-sec-ic" />switch teams</div>
           <template v-if="betweenRounds">
             <button v-if="canAppeal || myAppeal" type="button" class="gp-appeal" @click="appeal">

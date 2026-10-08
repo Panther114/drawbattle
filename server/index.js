@@ -186,6 +186,7 @@ wss.on('connection', (ws, url) => {
   const userId = url.searchParams.get('userId') || '';
   const userName = url.searchParams.has('userName') ? url.searchParams.get('userName') : undefined;
   const spectate = url.searchParams.get('spectate') === 'true';
+  const rating = url.searchParams.has('rating') ? url.searchParams.get('rating') : undefined;
   const game = games.get(gameId);
   if (!game) {
     ws.send(JSON.stringify([300, { type: 'GameNotFound', gameId }]));
@@ -204,7 +205,7 @@ wss.on('connection', (ws, url) => {
   });
   let tokens = 300;
   let refill = Date.now();
-  game.connect(ws, { userId, userName, spectate });
+  game.connect(ws, { userId, userName, spectate, rating });
   ws.on('message', (data) => {
     ws.isAlive = true;
     const raw = data.toString();
