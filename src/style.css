@@ -4481,3 +4481,12 @@ body {
     max-height: min(340px, 52vh);
   }
 }
+
+/* thin outlines on the rules dialog and the chat */
+.modal-body:has(.rm-root) {
+  border: 1px solid var(--black);
+}
+.gc-panel,
+.gc-pill {
+  border: 1px solid var(--black);
+}

@@ -26,6 +26,7 @@ const initialPack = props.gameSettings.wordListId;
 const wordListId = ref(initialPack);
 const showWordLength = ref(!props.gameSettings.hideWordLength);
 const streamerMode = ref(props.gameSettings.streamerMode);
+const finalDrawdown = ref(props.gameSettings.finalDrawdown !== false);
 const copied = ref(false);
 const modalOpen = ref(false);
 const rulesOpen = ref(false);
@@ -54,6 +55,7 @@ const current = () => ({
   wordListId: wordListId.value,
   hideWordLength: !showWordLength.value,
   streamerMode: streamerMode.value,
+  finalDrawdown: finalDrawdown.value,
 });
 
 function changeRounds(e) {
@@ -81,6 +83,12 @@ function changeShowLength(e) {
   track('change game setting', { 'game id': props.gameId, key: 'hideWordLength', value: !v });
   showWordLength.value = v;
   send({ ...current(), hideWordLength: !v });
+}
+function changeFinal(e) {
+  const v = e.target.checked;
+  track('change game setting', { 'game id': props.gameId, key: 'finalDrawdown', value: v });
+  finalDrawdown.value = v;
+  send({ ...current(), finalDrawdown: v });
 }
 function changeStreamer(e) {
   const v = e.target.checked;
@@ -125,6 +133,7 @@ watch(
     wordListId.value = s.wordListId;
     showWordLength.value = !s.hideWordLength;
     streamerMode.value = s.streamerMode;
+    finalDrawdown.value = s.finalDrawdown !== false;
   },
 );
 // keep the round count legal whenever the pack changes
@@ -237,6 +246,10 @@ const listIds = computed(() => {
               :disabled="disabled"
               @change="changeShowLength"
             />
+          </div>
+          <div class="st-item">
+            <label for="finalDrawdown" class="st-checkbox-label">play the final drawdown</label>
+            <input id="finalDrawdown" type="checkbox" :checked="finalDrawdown" :disabled="disabled" @change="changeFinal" />
           </div>
           <div class="st-item">
             <button class="st-rules-button" @click="rulesOpen = true">customize rules...</button>
