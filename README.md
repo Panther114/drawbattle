@@ -1,8 +1,8 @@
-# draw battle clone
+# Better Draw Battle
 
 A from-scratch clone of [drawbattle.io](https://drawbattle.io): a two-team drawing game with a frantic final round.
-The client (Vue 3 + Vite) and the backend (Express + `ws`) were written from observation of the real site: its
-network protocol, timings and rules were recorded by playing real games against it with bots and then re-implemented.
+I then took the vanilla game and implemented some great quality of life features.
+The game is now 670% as fun.
 
 ## screenshots
 
