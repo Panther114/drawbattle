@@ -26,7 +26,9 @@ function change() {
 }
 export function toggleTheme() {
   const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  if (!reduced && document.startViewTransition) {
+  // (small screens switch at once: a cross-fade of a phone-sized page costs more than it gives)
+  const wide = window.innerWidth >= 900;
+  if (!reduced && wide && document.startViewTransition) {
     // the browser blends a snapshot of the old page into the new one on the GPU: smooth even on slow devices
     document.startViewTransition(async () => {
       change();
@@ -34,7 +36,7 @@ export function toggleTheme() {
     });
     return;
   }
-  if (reduced) return change();
+  if (reduced || !wide) return change();
   // older browsers: let the colours glide
   const root = document.documentElement;
   root.classList.add('theme-fade');

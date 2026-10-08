@@ -113,9 +113,10 @@ Some websites forbid being shown inside another page, so there is a **pop-up win
 Everything that changes state is animated with one shared set of curves and timings (see the motion block at the end of
 `src/style.css`): pages and game screens fade and rise into place, the chat grows out of its pill and its messages slide in,
 dialogs scale in and out, switching between random and manual teams cross-fades the lists while players glide into their
-spots, cards and buttons lift on hover, inputs glow on focus, score rows stagger in, and switching themes blends the colours.
-Only opacity and transform are animated, so it stays smooth, and players who ask their system for **reduced motion** get
-none of it.
+spots, cards and buttons lift on hover, inputs glow on focus and score rows stagger in. Switching themes cross-fades the
+whole page on wide screens (phones switch at once), and quick switch is deliberately instant, with no animation at all.
+Only opacity and transform are animated, and players who ask their system for **reduced motion** get none of it.
+Frame pacing was checked in headless Edge with a 4x CPU slowdown at desktop and phone sizes.
 
 ### dark mode
 
