@@ -15,6 +15,7 @@ const tab = ref('official');
 const entering = ref(false);
 const idInput = ref();
 const customError = ref();
+const checking = ref(false);
 
 function openCustom() {
   entering.value = !entering.value;
@@ -22,6 +23,7 @@ function openCustom() {
 }
 async function submitCustom(e) {
   e.preventDefault();
+  if (checking.value) return;
   const id = parseInt(idInput.value.value.trim());
   track('submit custom word pack id', { 'game id': props.gameId, 'word list id': id });
   if (Number.isNaN(id)) {
@@ -29,7 +31,12 @@ async function submitCustom(e) {
     return;
   }
   customError.value = undefined;
-  await loadPack(id);
+  checking.value = true;
+  try {
+    await loadPack(id);
+  } finally {
+    checking.value = false;
+  }
   if (packs[id] !== undefined) emit('select-list', id);
   else customError.value = 'word list not found';
 }
@@ -58,7 +65,7 @@ function clickTab(name) {
             <div v-if="entering">
               <form @submit="submitCustom">
                 <input ref="idInput" type="text" placeholder="6-digit word pack id" class="wp-custom-input" />
-                <button type="submit" class="wp-custom-submit">enter</button>
+                <button type="submit" class="wp-custom-submit" :disabled="checking">enter</button>
                 <button type="button" class="wp-custom-cancel" @click="entering = false">cancel</button>
               </form>
               <div v-if="customError !== undefined" class="wp-custom-error">{{ customError }}</div>

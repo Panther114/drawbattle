@@ -47,6 +47,12 @@ textarea {
 button {
   outline: 0;
 }
+button:focus-visible,
+select:focus-visible,
+input[type='checkbox']:focus-visible {
+  outline: 2px dashed var(--gray);
+  outline-offset: 2px;
+}
 input {
   font-size: 20px;
 }
@@ -72,6 +78,7 @@ a:hover {
   text-align: center;
   transform: translate(-50%, -100%);
   margin-top: -8px;
+  --ax: 0px;
   opacity: 0;
   transition: opacity 0.25s;
   font-family: Schoolbell, Avenir, Helvetica, Arial, sans-serif;
@@ -79,10 +86,21 @@ a:hover {
 .tip.show {
   opacity: 1;
 }
+/* near the top edge of the window the tip drops below its element instead of being cut off */
+.tip.below {
+  transform: translate(-50%, 0);
+  margin-top: 8px;
+}
+.tip.below::after {
+  bottom: auto;
+  top: -5px;
+  border-width: 0 5px 5px 5px;
+  border-color: transparent transparent #000000d0 transparent;
+}
 .tip::after {
   content: '';
   position: absolute;
-  left: calc(50% - 5px);
+  left: calc(50% - 5px + var(--ax));
   bottom: -5px;
   width: 0;
   height: 0;
@@ -94,12 +112,26 @@ a:hover {
 /* ===== button ===== */
 .btn-root {
   display: inline-block;
-  animation: btn-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
 }
+/* squash and stretch as it lands (played from the motion block at the end of this file) */
 @keyframes btn-pop {
-  from {
-    opacity: 0;
-    scale: 0.6;
+  0% {
+    scale: 0.3;
+  }
+  38% {
+    scale: 1.14 0.86;
+  }
+  56% {
+    scale: 0.92 1.08;
+  }
+  72% {
+    scale: 1.04 0.97;
+  }
+  86% {
+    scale: 0.99 1.01;
+  }
+  100% {
+    scale: 1;
   }
 }
 .btn {
@@ -514,7 +546,6 @@ a:hover {
   .game-info {
     font-size: 16px;
     top: 16px;
-    right: 32px;
     right: 16px;
   }
 }
@@ -1040,7 +1071,7 @@ a:hover {
 .mp-guess-input {
   border: 3px solid silver;
   border-radius: 8px;
-  padding: 4px 0 4px 8px;
+  padding: 4px 8px;
   transition: border-color 0.2s;
   box-sizing: border-box;
   width: 100%;
@@ -1114,7 +1145,8 @@ a:hover {
   width: 20vw;
   max-width: 180px;
   padding-left: 32px;
-  padding-top: 18px;
+  /* clears the game code and sound toggles pinned to the top right corner */
+  padding-top: 64px;
   display: flex;
   flex-direction: column;
 }
@@ -1596,6 +1628,9 @@ a:hover {
 .wp-item:disabled {
   cursor: default;
 }
+.wp-item:disabled:not(.selected) {
+  opacity: 0.5;
+}
 .wp-tag {
   position: absolute;
   top: 6px;
@@ -1996,24 +2031,6 @@ a:hover {
   font-size: 24px;
   margin-bottom: 2px;
 }
-.sc-fade-enter-active,
-.sc-fade-leave-active {
-  transition: opacity 0.5s ease-in-out;
-}
-.sc-fade-enter-from,
-.sc-fade-leave-to {
-  opacity: 0;
-}
-.sc-final-enter-active {
-  transition:
-    opacity 0.5s ease-in-out,
-    transform 0.5s ease-in-out;
-  transition-delay: 1s;
-}
-.sc-final-enter-from {
-  opacity: 0;
-  transform: scale(0.2) rotate(-720deg);
-}
 .sc-losing-drawer {
   position: relative;
 }
@@ -2139,9 +2156,6 @@ a:hover {
     font-size: 48px;
   }
 }
-.sm-fade-enter-active {
-  transition: opacity 0.5s ease-in-out;
-}
 .sm-fade-enter-from {
   opacity: 0;
 }
@@ -2183,9 +2197,6 @@ a:hover {
   height: 157px;
   margin-bottom: 16px;
   cursor: pointer;
-}
-.sm-trophy:hover {
-  animation: sm-shake 0.4s linear;
 }
 @keyframes sm-shake {
   0% {
@@ -2455,6 +2466,11 @@ a:hover {
 }
 .hm-container {
   position: relative;
+  max-width: 100%;
+}
+.hm-container > svg {
+  max-width: 100%;
+  height: auto;
 }
 .hm-guess {
   font-size: 20px;
@@ -2482,14 +2498,9 @@ a:hover {
 }
 .hm-guess-inner {
   opacity: 0;
-  transform: scale(0.3);
-  transition:
-    opacity 0.4s,
-    transform 0.4s cubic-bezier(0.37, 0.08, 0.35, 1.44);
 }
 .hm-guess.show .hm-guess-inner {
   opacity: 1;
-  transform: scale(1);
 }
 .hm-guess1 {
   left: calc(100% + 20px);
@@ -2511,7 +2522,8 @@ a:hover {
   top: 65%;
   transform: rotate(4deg);
 }
-@media (max-width: 1000px) {
+/* below this width the bubbles would run into the fixed navigation on the left */
+@media (max-width: 1180px) {
   .hm-guess {
     display: none;
   }
@@ -3333,13 +3345,6 @@ a:hover {
   color: var(--gray);
   font-size: 14px;
   transform: rotate(-4deg);
-  animation: hm-edition-in 0.6s 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
-}
-@keyframes hm-edition-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px) rotate(-8deg) scale(0.8);
-  }
 }
 .hm-picker {
   display: flex;
@@ -3404,21 +3409,6 @@ a:hover {
   color: var(--gray);
   font-size: 13px;
   margin-bottom: 4px;
-}
-.hm-pop-enter-active {
-  transition:
-    opacity 0.3s,
-    transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.hm-pop-leave-active {
-  transition:
-    opacity 0.15s,
-    transform 0.15s;
-}
-.hm-pop-enter-from,
-.hm-pop-leave-to {
-  opacity: 0;
-  transform: translateY(-10px) scale(0.85);
 }
 .hm-extra-row {
   display: flex;
@@ -3533,7 +3523,7 @@ a:hover {
   padding: 1px 10px;
   border-radius: 12px;
   background: var(--blue);
-  animation: btn-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+  animation: m-jelly 0.6s ease-out backwards;
 }
 .lb-player.team1 {
   background: var(--purple);
@@ -3556,22 +3546,6 @@ a:hover {
   display: inline-block;
   margin-top: 16px;
   font-size: 16px;
-}
-.lb-list-enter-active,
-.lb-list-leave-active,
-.lb-list-move {
-  transition:
-    opacity 0.35s,
-    transform 0.35s;
-}
-.lb-list-enter-from,
-.lb-list-leave-to {
-  opacity: 0;
-  transform: translateY(12px) scale(0.96);
-}
-.lb-list-leave-active {
-  position: absolute;
-  width: 100%;
 }
 
 /* number inputs */
@@ -3771,7 +3745,7 @@ a:hover {
 }
 /* dark line-art icons flip to light ones; coloured icons already read well on dark */
 :root[data-theme='dark'] :is(
-    .sm-word-arrow.prev, .sm-word-arrow.next, .hm-wp-icon, .rs-duel-icon, .re-graphic:not(.didwin),
+    .sm-word-arrow.prev, .sm-word-arrow.next, .hm-wp-icon,
     .wp-tab.selected::after, .lobby-team-line, .sc-round-line, .sm-header-line, .hm-join-input-line,
     .ml-icon.log, .wp-preview-icon, .tb-replay-icon, .sound-toggle
   ) {
@@ -4253,13 +4227,15 @@ a:hover {
   text-align: center;
   font-size: 15px;
   border-radius: 999px;
-  color: #101010;
+  color: var(--ink);
   background: #80808040;
 }
 .stt-result.win {
+  color: #101010;
   background: var(--green);
 }
 .stt-result.loss {
+  color: #101010;
   background: #fdb6ac;
 }
 .stt-score {
@@ -4554,18 +4530,6 @@ body {
 .gt-item.second .gt-pts {
   background: var(--blue);
 }
-.gt-enter-active,
-.gt-leave-active {
-  transition: opacity 0.3s, transform 0.3s;
-}
-.gt-enter-from {
-  opacity: 0;
-  transform: translateY(14px);
-}
-.gt-leave-to {
-  opacity: 0;
-  transform: translateX(-20px);
-}
 @media (max-width: 600px) {
   .gt-stack {
     left: 10px;
@@ -4673,14 +4637,16 @@ body {
   min-width: 56px;
   text-align: center;
   border-radius: 999px;
-  color: #101010;
+  color: var(--ink);
   background: #80808040;
   padding: 0 10px;
 }
 .sm-score-delta.up {
+  color: #101010;
   background: var(--green);
 }
 .sm-score-delta.down {
+  color: #101010;
   background: #fdb6ac;
 }
 @media (max-width: 700px) {
@@ -4966,21 +4932,293 @@ body {
 }
 
 /* ===== motion =====
-   One set of curves and timings for the whole UI. Only opacity / transform / colour-like properties animate,
-   so everything stays on the compositor and smooth. Reduced-motion players get none of it (end of block). */
+   A squishy sticker-book motion language: things get slapped on like stickers, pop like jelly, drop in and land with a
+   squish, and the big game moments slam onto the screen. House rules, so it never fights the layout:
+   - entrances animate the individual `translate` / `scale` / `rotate` properties, never `transform`, so they stack on
+     top of every element's own tilt, centring and hover transform instead of replacing it;
+   - entrances fill `backwards` only: once they finish, hover and state styles own the element again;
+   - fading is its own short animation (m-fade), so dimmed elements land on their own opacity, not on 1;
+   - nothing inside a scrolling box slides or grows past its own edges (it would flash a scrollbar);
+   - page and game-screen containers only fade (a transform there would drag the fixed navigation along), and nothing
+     that holds the live drawing canvas is ever scaled (the canvas maps the pointer from its on-screen box);
+   - players who ask their system for reduced motion get none of it (end of block). */
 :root {
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-back-in: cubic-bezier(0.36, 0, 0.66, -0.56);
+  /* real springs where the browser can draw them, a close cubic stand-in where it can't */
+  --spring: var(--ease-spring);
+  --spring-soft: var(--ease-out);
   --t-fast: 0.16s;
   --t-med: 0.28s;
   --t-slow: 0.45s;
+}
+@supports (animation-timing-function: linear(0, 1)) {
+  :root {
+    --spring: linear(
+      0, 0.009, 0.035 2.1%, 0.141, 0.281 6.7%, 0.723 12.9%, 0.938 16.7%, 1.017, 1.077, 1.121, 1.149 24.3%, 1.159, 1.163,
+      1.161, 1.154 29.9%, 1.129 32.8%, 1.051 39.6%, 1.017 43.1%, 0.991, 0.977 51%, 0.974 53.8%, 0.975 57.1%, 0.997 69.8%,
+      1.003 76.9%, 1.004 83.8%, 1
+    );
+    --spring-soft: linear(
+      0, 0.006, 0.025 2.8%, 0.101 6.1%, 0.539 18.9%, 0.721 25.3%, 0.849 31.5%, 0.937 38.1%, 0.968 41.8%, 0.991 45.7%,
+      1.006 50.1%, 1.015 55%, 1.017 63.9%, 1.001 85.9%, 1
+    );
+  }
 }
 html {
   scroll-behavior: smooth;
 }
 
-/* switching theme: colours glide instead of snapping */
+/* --- the vocabulary --- */
+@keyframes m-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes m-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+/* floats up into place (spring) */
+@keyframes m-rise {
+  from {
+    translate: 0 28px;
+    scale: 0.94;
+  }
+}
+@keyframes m-rise-flat {
+  from {
+    translate: 0 24px;
+  }
+}
+@keyframes m-rise-sm {
+  from {
+    translate: 0 10px;
+  }
+}
+/* grows out of nothing (spring) */
+@keyframes m-pop {
+  from {
+    scale: 0.3;
+  }
+}
+@keyframes m-spin-pop {
+  from {
+    scale: 0;
+    rotate: -160deg;
+  }
+}
+/* squash and stretch, like poking a jelly */
+@keyframes m-jelly {
+  0% {
+    scale: 0.25;
+  }
+  40% {
+    scale: 1.16 0.84;
+  }
+  58% {
+    scale: 0.9 1.1;
+  }
+  74% {
+    scale: 1.05 0.95;
+  }
+  88% {
+    scale: 0.98 1.02;
+  }
+  100% {
+    scale: 1;
+  }
+}
+/* slapped on like a sticker: in at a tilt, overshoots, settles (spring; --m-tilt picks the tilt) */
+@keyframes m-sticker {
+  from {
+    translate: 0 30px;
+    scale: 0.6;
+    rotate: var(--m-tilt, -8deg);
+  }
+}
+/* swings in from the side (spring; --m-from and --m-tilt) */
+@keyframes m-slide-x {
+  from {
+    translate: var(--m-from, -60px) 0;
+    rotate: var(--m-tilt, -6deg);
+  }
+}
+/* falls from above and lands with a squish */
+@keyframes m-drop {
+  0% {
+    translate: 0 -70px;
+    scale: 0.9 1.15;
+    animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+  }
+  48% {
+    translate: 0 0;
+    scale: 1;
+    animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1);
+  }
+  60% {
+    scale: 1.16 0.84;
+  }
+  76% {
+    translate: 0 -8px;
+    scale: 0.95 1.06;
+  }
+  90% {
+    translate: 0 0;
+    scale: 1.02 0.98;
+  }
+  100% {
+    translate: 0 0;
+    scale: 1;
+  }
+}
+/* big words crash onto the screen out of a blur */
+@keyframes m-slam {
+  0% {
+    opacity: 0;
+    scale: 2.6;
+    filter: blur(8px);
+  }
+  45% {
+    opacity: 1;
+    scale: 0.88;
+    filter: blur(0);
+  }
+  62% {
+    scale: 1.1;
+  }
+  80% {
+    scale: 0.97;
+  }
+  100% {
+    scale: 1;
+    filter: blur(0);
+  }
+}
+/* a trophy (or a sad face) bursting out with a spin */
+@keyframes m-trophy-in {
+  0% {
+    scale: 0;
+    rotate: -40deg;
+  }
+  55% {
+    scale: 1.25;
+    rotate: 12deg;
+  }
+  75% {
+    scale: 0.92;
+    rotate: -5deg;
+  }
+  90% {
+    scale: 1.03;
+    rotate: 2deg;
+  }
+  100% {
+    scale: 1;
+    rotate: 0deg;
+  }
+}
+/* stamped down hard, like a rubber stamp */
+@keyframes m-stamp {
+  0% {
+    opacity: 0;
+    scale: 3;
+    rotate: -30deg;
+  }
+  50% {
+    opacity: 1;
+    scale: 0.85;
+    rotate: 6deg;
+  }
+  75% {
+    scale: 1.1;
+    rotate: -2deg;
+  }
+  100% {
+    scale: 1;
+    rotate: 0deg;
+  }
+}
+@keyframes m-grow-x {
+  from {
+    scale: 0 1;
+  }
+}
+@keyframes m-pop-out {
+  to {
+    opacity: 0;
+    scale: 0.3;
+    rotate: 10deg;
+  }
+}
+/* each new countdown number lands with a thump */
+@keyframes m-tick {
+  from {
+    scale: 1.9;
+    rotate: -8deg;
+  }
+}
+/* idle loops */
+@keyframes m-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -6px;
+  }
+}
+@keyframes m-bob {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: var(--m-bob, 0 -8px);
+  }
+}
+@keyframes m-wiggle-loop {
+  0%,
+  64%,
+  100% {
+    rotate: 0deg;
+  }
+  70% {
+    rotate: -9deg;
+  }
+  76% {
+    rotate: 8deg;
+  }
+  82% {
+    rotate: -5deg;
+  }
+  88% {
+    rotate: 3deg;
+  }
+}
+@keyframes m-tick-tock {
+  0%,
+  100% {
+    rotate: -8deg;
+  }
+  50% {
+    rotate: 8deg;
+  }
+}
+@keyframes m-throb {
+  0%,
+  100% {
+    scale: 1;
+  }
+  50% {
+    scale: 1.06;
+  }
+}
+
+/* switching theme: colours glide instead of snapping (browsers without view transitions) */
 .theme-fade,
 .theme-fade *,
 .theme-fade *::before,
@@ -4994,153 +5232,357 @@ html {
     box-shadow 0.4s ease !important;
 }
 
-/* pages and game screens */
-.page-enter-active {
-  transition:
-    opacity var(--t-med) var(--ease-out),
-    transform 0.4s var(--ease-out);
-}
-.page-leave-active {
-  transition:
-    opacity 0.12s var(--ease-in),
-    transform 0.12s var(--ease-in);
-}
-.page-enter-from {
-  opacity: 0;
-  transform: translateY(10px);
-}
-.page-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-}
+/* --- pages and game screens: the container fades, its pieces arrive one after another --- */
+.page-enter-active,
 .view-enter-active {
-  transition:
-    opacity var(--t-med) var(--ease-out),
-    transform 0.4s var(--ease-out);
+  transition: opacity 0.3s var(--ease-out);
 }
+.page-leave-active,
 .view-leave-active {
-  transition: opacity 0.12s var(--ease-in);
+  transition: opacity 0.16s var(--ease-in);
 }
-.view-enter-from {
-  opacity: 0;
-  transform: translateY(12px) scale(0.99);
-}
+.page-enter-from,
+.page-leave-to,
+.view-enter-from,
 .view-leave-to {
   opacity: 0;
 }
-
-/* lobby: random <-> manual teams, and players arriving / leaving */
-.lobby-swap-enter-active {
+/* on the way out the pieces sink back a little (the round's side pane holds a fixed divider and the board holds the
+   canvas, so those only fade; .mp-main is the whole round screen, so a page leaving the game skips it too) */
+.page-leave-active > :not(.top-nav, .mp-main),
+.view-leave-active > :not(.top-nav, .mp-side-pane, .mp-left) {
   transition:
-    opacity 0.32s var(--ease-out),
-    transform 0.42s var(--ease-out);
+    translate 0.16s var(--ease-in),
+    scale 0.16s var(--ease-in);
+}
+.page-leave-to > :not(.top-nav, .mp-main),
+.view-leave-to > :not(.top-nav, .mp-side-pane, .mp-left) {
+  translate: 0 -14px;
+  scale: 0.96;
+}
+:is(.hm-root, .lb-root, .stt-root, .wpp-root, .tos-root) > :not(.top-nav),
+.lobby-root > :is(.lobby-welcome, .lobby-name-form, .lobby-start-container, .st-table) {
+  animation:
+    m-fade 0.4s var(--ease-out) backwards,
+    m-rise 0.9s var(--spring) backwards;
+  animation-delay: var(--m-d, 0s);
+}
+:is(.hm-root, .lb-root, .stt-root, .wpp-root, .tos-root) > :nth-child(3) {
+  --m-d: 0.07s;
+}
+:is(.hm-root, .lb-root, .stt-root, .wpp-root, .tos-root) > :nth-child(4) {
+  --m-d: 0.14s;
+}
+:is(.hm-root, .lb-root, .stt-root, .wpp-root, .tos-root) > :nth-child(5) {
+  --m-d: 0.21s;
+}
+:is(.hm-root, .lb-root, .stt-root, .wpp-root, .tos-root) > :nth-child(6) {
+  --m-d: 0.28s;
+}
+:is(.hm-root, .lb-root, .stt-root, .wpp-root, .tos-root) > :nth-child(7) {
+  --m-d: 0.35s;
+}
+:is(.hm-root, .lb-root, .stt-root, .wpp-root, .tos-root) > :nth-child(n + 8) {
+  --m-d: 0.42s;
+}
+.lobby-root > .st-table {
+  --m-d: 0.12s;
+}
+.lobby-root > .lobby-start-container {
+  --m-d: 0.24s;
+}
+
+/* the navigation pills skip in from the left, one after another */
+.top-nav > * {
+  animation:
+    m-fade 0.3s var(--ease-out) backwards,
+    m-nav-in 0.7s var(--spring) backwards;
+  animation-delay: var(--m-n, 0s);
+}
+.top-nav > :nth-child(2) {
+  --m-n: 0.045s;
+}
+.top-nav > :nth-child(3) {
+  --m-n: 0.09s;
+}
+.top-nav > :nth-child(4) {
+  --m-n: 0.135s;
+}
+.top-nav > :nth-child(5) {
+  --m-n: 0.18s;
+}
+.top-nav > :nth-child(n + 6) {
+  --m-n: 0.225s;
+}
+@keyframes m-nav-in {
+  from {
+    translate: -24px 0;
+    rotate: -6deg;
+    scale: 0.85;
+  }
+}
+.game-info {
+  animation:
+    m-fade 0.4s var(--ease-out) backwards,
+    m-slide-x 0.8s var(--spring) backwards;
+  --m-from: 40px;
+  --m-tilt: 4deg;
+}
+/* the moon and sun spin in when the theme flips */
+.theme-icon {
+  animation: m-spin-pop 0.6s var(--spring) backwards;
+}
+
+/* --- buttons: each one plops in like jelly (keyframes in the button section) --- */
+.btn-root {
+  animation:
+    m-fade 0.25s var(--ease-out) backwards,
+    btn-pop 0.8s ease-out backwards;
+}
+
+/* --- home --- */
+.hm-letter {
+  display: inline-block;
+  white-space: pre;
+  transform-origin: 50% 90%;
+  transition: scale 0.35s var(--spring);
+  animation:
+    m-fade 0.3s var(--ease-out) backwards,
+    m-letter-drop 0.9s backwards,
+    m-letter-wave 7s ease-in-out infinite;
+  animation-delay:
+    calc(var(--i, 0) * 45ms + 0.1s),
+    calc(var(--i, 0) * 45ms + 0.1s),
+    calc(var(--i, 0) * 70ms + 2.2s);
+}
+.hm-letter:hover {
+  scale: 1.3;
+}
+@keyframes m-letter-drop {
+  0% {
+    translate: 0 -1.1em;
+    scale: 0.5 1.5;
+    rotate: var(--r, 0deg);
+    animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+  }
+  45% {
+    translate: 0 0;
+    scale: 1.3 0.72;
+    rotate: 0deg;
+    animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1);
+  }
+  65% {
+    translate: 0 -0.16em;
+    scale: 0.9 1.12;
+  }
+  82% {
+    translate: 0 0;
+    scale: 1.06 0.95;
+  }
+  100% {
+    translate: 0 0;
+    scale: 1;
+    rotate: 0deg;
+  }
+}
+/* every few seconds a little wave runs along the title */
+@keyframes m-letter-wave {
+  0%,
+  14%,
+  100% {
+    translate: 0 0;
+  }
+  5% {
+    translate: 0 -0.2em;
+  }
+  9% {
+    translate: 0 0.03em;
+  }
+}
+.hm-edition {
+  animation:
+    m-fade 0.25s var(--ease-out) 0.85s backwards,
+    m-sticker 0.8s var(--spring) 0.85s backwards;
+  --m-tilt: 30deg;
+}
+@media (max-width: 600px) {
+  /* (on phones the tag is a full-width line under the title: a gentler tilt) */
+  .hm-edition {
+    --m-tilt: 6deg;
+  }
+}
+/* the guesses around the doodle pop like speech bubbles, then drift */
+.hm-guess.show .hm-guess-inner {
+  animation:
+    m-fade 0.25s var(--ease-out) backwards,
+    m-jelly 0.75s ease-out backwards;
+}
+.hm-guess.show {
+  animation: m-float 3.6s ease-in-out 0.8s infinite;
+}
+.hm-guess2.show {
+  animation-duration: 4.2s;
+}
+.hm-guess3.show {
+  animation-duration: 3.9s;
+}
+.hm-guess4.show {
+  animation-duration: 4.5s;
+}
+.hm-join-input-line {
+  animation: m-grow-x 0.8s var(--spring) 0.45s backwards;
+}
+.hm-pop-enter-active {
+  transform-origin: 50% 0;
+  animation:
+    m-fade 0.2s var(--ease-out) backwards,
+    m-picker-in 0.7s var(--spring) backwards;
+}
+.hm-pop-leave-active {
+  transform-origin: 50% 0;
+  animation: m-picker-out 0.18s var(--ease-back-in) forwards;
+}
+@keyframes m-picker-in {
+  from {
+    translate: 0 -16px;
+    scale: 0.5 0.2;
+    rotate: -4deg;
+  }
+}
+@keyframes m-picker-out {
+  to {
+    opacity: 0;
+    translate: 0 -10px;
+    scale: 0.7 0.4;
+  }
+}
+.hm-how-row {
+  animation:
+    m-fade 0.3s var(--ease-out) backwards,
+    m-slide-x 0.7s var(--spring) backwards;
+  animation-delay: var(--m-h, 0.55s);
+  --m-from: -24px;
+  --m-tilt: -3deg;
+}
+.hm-how-row:nth-child(2) {
+  --m-h: 0.64s;
+}
+.hm-how-row:nth-child(3) {
+  --m-h: 0.73s;
+}
+.hm-how-icon {
+  animation: m-spin-pop 0.7s var(--spring) backwards;
+  animation-delay: calc(var(--m-h, 0.55s) + 0.1s);
+}
+
+/* --- lobby: teams slap down, players jelly in and pop out --- */
+.lobby-team {
+  animation:
+    m-fade 0.35s var(--ease-out) backwards,
+    m-sticker 0.9s var(--spring) backwards;
+  animation-delay: 0.08s;
+  --m-tilt: -7deg;
+}
+.lobby-team:nth-child(2) {
+  animation-delay: 0.18s;
+  --m-tilt: 7deg;
+}
+.lobby-team-line {
+  animation: m-grow-x 0.7s var(--spring) 0.35s backwards;
+}
+.lobby-swap-enter-active {
+  transition: opacity 0.3s var(--ease-out);
 }
 .lobby-swap-leave-active {
   transition:
-    opacity 0.14s var(--ease-in),
-    transform 0.14s var(--ease-in);
+    opacity 0.16s var(--ease-in),
+    scale 0.16s var(--ease-in);
 }
-.lobby-swap-enter-from {
-  opacity: 0;
-  transform: translateY(14px) scale(0.97);
-}
+.lobby-swap-enter-from,
 .lobby-swap-leave-to {
   opacity: 0;
-  transform: scale(0.97);
+}
+.lobby-swap-leave-to {
+  scale: 0.94;
 }
 .lobby-users {
   position: relative;
 }
+.lobby-user {
+  transition: color var(--t-fast) ease;
+}
 .lu-enter-active {
-  transition:
-    opacity 0.35s var(--ease-out),
-    transform 0.45s var(--ease-spring);
+  animation:
+    m-fade 0.25s var(--ease-out) backwards,
+    m-jelly 0.7s ease-out backwards;
 }
 .lu-leave-active {
   position: absolute;
   left: 0;
   right: 0;
-  transition:
-    opacity 0.2s var(--ease-in),
-    transform 0.2s var(--ease-in);
+  animation: m-pop-out 0.28s var(--ease-back-in) forwards;
 }
 .lu-move {
-  transition: transform 0.45s var(--ease-out);
-}
-.lu-enter-from {
-  opacity: 0;
-  transform: translateY(10px) scale(0.9);
-}
-.lu-leave-to {
-  opacity: 0;
-  transform: translateX(-14px) scale(0.95);
-}
-.lobby-user {
-  transition: color var(--t-fast) ease;
+  transition: transform 0.55s var(--spring);
 }
 .lobby-random-note,
 .lobby-start-subtext {
-  animation: fade-in 0.5s var(--ease-out) both;
-}
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-}
-@keyframes pop-in {
-  from {
-    opacity: 0;
-    transform: scale(0.4);
-  }
+  animation:
+    m-fade 0.5s var(--ease-out) backwards,
+    m-rise-sm 0.6s var(--spring) backwards;
 }
 
-/* chat: pill <-> panel, tabs, messages, badge */
+/* --- chat: the pill and the panel bounce out of the corner, messages bubble up --- */
 .gc {
   transform-origin: bottom right;
 }
 .gc-swap-enter-active {
-  transition:
-    opacity 0.26s var(--ease-out),
-    transform 0.38s var(--ease-spring);
   transform-origin: bottom right;
+  animation:
+    m-fade 0.2s var(--ease-out) backwards,
+    m-chat-open 0.75s var(--spring) backwards;
 }
 .gc-swap-leave-active {
-  transition:
-    opacity 0.12s var(--ease-in),
-    transform 0.14s var(--ease-in);
   transform-origin: bottom right;
+  animation: m-chat-close 0.2s var(--ease-back-in) forwards;
 }
-.gc-swap-enter-from {
-  opacity: 0;
-  transform: translateY(14px) scale(0.86);
+@keyframes m-chat-open {
+  from {
+    translate: 0 24px;
+    scale: 0.2;
+    rotate: 8deg;
+  }
 }
-.gc-swap-leave-to {
-  opacity: 0;
-  transform: translateY(8px) scale(0.9);
+@keyframes m-chat-close {
+  to {
+    opacity: 0;
+    translate: 0 16px;
+    scale: 0.4;
+    rotate: 6deg;
+  }
 }
 .gc-chat,
 .gc-players {
-  animation: tab-in 0.3s var(--ease-out) both;
-}
-@keyframes tab-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
+  animation: m-fade 0.3s var(--ease-out) backwards;
 }
 .gc-msg,
 .gc-sys {
-  animation: msg-in 0.34s var(--ease-out) both;
+  transform-origin: 0 100%;
+  animation:
+    m-fade 0.25s var(--ease-out) backwards,
+    m-bubble 0.6s var(--spring) backwards;
 }
-@keyframes msg-in {
+.gc-msg.mine {
+  transform-origin: 100% 100%;
+}
+/* (scale only, shrinking into the bubble's own corner: anything sliding would poke out of the scrolling list) */
+@keyframes m-bubble {
   from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    scale: 0.4;
   }
 }
 .gc-badge {
-  animation: pop-in 0.35s var(--ease-spring) both;
+  animation: m-jelly 0.6s ease-out backwards;
 }
 .gc-pill {
   transition:
@@ -5203,39 +5645,34 @@ html {
   background-color: var(--glass-a0);
 }
 
-/* modal dialogs */
+/* --- dialogs bounce up from below and tip away when closed (Modal.vue waits 170ms) --- */
 .modal-backdrop {
-  animation: backdrop-in 0.25s ease both;
+  animation: m-fade 0.3s ease backwards;
 }
 .modal-body {
-  animation: modal-in 0.4s var(--ease-spring) both;
+  animation:
+    m-fade 0.2s var(--ease-out) backwards,
+    m-modal-in 0.75s var(--spring) backwards;
 }
-@keyframes backdrop-in {
+@keyframes m-modal-in {
   from {
-    opacity: 0;
-  }
-}
-@keyframes modal-in {
-  from {
-    opacity: 0;
-    transform: translateY(18px) scale(0.94);
+    translate: 0 60px;
+    scale: 0.7;
+    rotate: -3deg;
   }
 }
 .modal-container.closing .modal-backdrop {
-  animation: backdrop-out 0.17s ease both;
+  animation: m-fade-out 0.17s ease forwards;
 }
 .modal-container.closing .modal-body {
-  animation: modal-out 0.17s var(--ease-in) both;
+  animation: m-modal-out 0.17s var(--ease-back-in) forwards;
 }
-@keyframes backdrop-out {
+@keyframes m-modal-out {
   to {
     opacity: 0;
-  }
-}
-@keyframes modal-out {
-  to {
-    opacity: 0;
-    transform: translateY(10px) scale(0.96);
+    translate: 0 24px;
+    scale: 0.85;
+    rotate: 2deg;
   }
 }
 .modal-close {
@@ -5245,7 +5682,505 @@ html {
   transform: rotate(90deg) scale(1.1);
 }
 
-/* hover and focus: cards, rows, pills, inputs, links */
+/* --- toasts zoom in from the side and wobble --- */
+.gt-enter-active {
+  animation:
+    m-fade 0.2s var(--ease-out) backwards,
+    m-toast-in 0.8s var(--spring) backwards;
+}
+.gt-leave-active {
+  animation: m-toast-out 0.3s var(--ease-back-in) forwards;
+}
+.gt-item.gt-move {
+  transition: transform 0.45s var(--spring);
+}
+@keyframes m-toast-in {
+  from {
+    translate: -110% 0;
+    scale: 0.7;
+    rotate: -12deg;
+  }
+}
+@keyframes m-toast-out {
+  to {
+    opacity: 0;
+    translate: -40px 0;
+    scale: 0.8;
+    rotate: -6deg;
+  }
+}
+.gt-pts {
+  display: inline-block;
+  animation: m-jelly 0.7s ease-out 0.15s backwards;
+}
+
+/* --- the round: the board rises, the guess pane and other teams swing in --- */
+.mp-main > .mp-left {
+  animation:
+    m-fade 0.35s var(--ease-out) backwards,
+    m-rise-flat 0.7s var(--spring) backwards;
+}
+.mp-main > .mp-guess-pane,
+.mp-side-content {
+  animation:
+    m-fade 0.35s var(--ease-out) 0.08s backwards,
+    m-slide-x 0.8s var(--spring) 0.08s backwards;
+  --m-from: 50px;
+  --m-tilt: 3deg;
+}
+.mp-side-content {
+  animation-delay: 0.16s;
+}
+.mp-did-guess {
+  display: inline-block;
+  animation: m-jelly 0.8s ease-out backwards;
+}
+
+/* --- canvas overlays: the big moments --- */
+.co-overlay {
+  animation: m-fade 0.35s var(--ease-out) backwards;
+}
+:is(.co-contents, .co-bottom, .co-top-left, .co-top-right) > * {
+  animation:
+    m-fade 0.3s var(--ease-out) backwards,
+    m-sticker 0.8s var(--spring) backwards;
+  animation-delay: var(--m-d, 0.08s);
+}
+.co-contents > :nth-child(2) {
+  --m-d: 0.18s;
+}
+.co-contents > :nth-child(3) {
+  --m-d: 0.28s;
+}
+.co-contents > :nth-child(n + 4) {
+  --m-d: 0.38s;
+}
+/* a leaving fade-swap child has long finished its entrance: without this Vue waits out the (dead) entrance animation
+   instead of the 0.5s fade, and out-in mode shows a blank overlay in between */
+.co-contents > .fade-leave-active {
+  animation: none;
+}
+/* the word choices plop in one by one, the chosen one gets a bouncing arrow */
+.co-overlay .rs-choices > * {
+  animation:
+    m-fade 0.25s var(--ease-out) backwards,
+    m-jelly 0.75s ease-out backwards;
+  animation-delay: var(--m-c, 0.28s);
+}
+.co-overlay .rs-choices > :nth-child(2) {
+  --m-c: 0.38s;
+}
+.co-overlay .rs-choices > :nth-child(3) {
+  --m-c: 0.48s;
+}
+.rs-choice-wrapper .btn-root {
+  animation: none;
+}
+.rs-arrow {
+  animation:
+    m-fade 0.2s var(--ease-out) backwards,
+    m-pop 0.6s var(--spring) backwards,
+    m-bob 1s ease-in-out 0.6s infinite;
+}
+.rs-small .rs-arrow {
+  --m-bob: 6px 0;
+}
+/* drawer vs drawer: the names swing in from both sides and the duel badge crashes down between them */
+.co-contents > .rs-drawer-names {
+  animation: none;
+}
+.rs-drawer-names > .rs-drawer-name {
+  animation:
+    m-fade 0.3s var(--ease-out) 0.08s backwards,
+    m-slide-x 0.9s var(--spring) 0.08s backwards;
+  --m-from: -90px;
+  --m-tilt: -10deg;
+}
+.rs-drawer-names > .rs-drawer-name:last-child {
+  --m-from: 90px;
+  --m-tilt: 10deg;
+}
+.rs-duel-icon {
+  animation:
+    m-fade 0.3s var(--ease-out) 0.35s backwards,
+    m-duel-in 0.8s ease-out 0.35s backwards;
+}
+@keyframes m-duel-in {
+  0% {
+    scale: 3;
+    rotate: -90deg;
+  }
+  55% {
+    scale: 0.85;
+    rotate: 8deg;
+  }
+  75% {
+    scale: 1.08;
+    rotate: -4deg;
+  }
+  100% {
+    scale: 1;
+    rotate: 0deg;
+  }
+}
+.m-tick {
+  display: inline-block;
+  animation:
+    m-fade 0.2s var(--ease-out) backwards,
+    m-tick 0.55s var(--spring) backwards;
+}
+.rh-timer-icon {
+  animation: m-tick-tock 1s ease-in-out infinite;
+}
+/* the round's result */
+.co-overlay .re-graphic {
+  animation:
+    m-fade 0.3s var(--ease-out) backwards,
+    m-trophy-in 0.9s ease-out backwards;
+}
+.co-overlay .re-graphic.didwin {
+  animation:
+    m-fade 0.3s var(--ease-out) backwards,
+    m-trophy-in 0.9s ease-out backwards,
+    m-wiggle-loop 2.6s ease-in-out 1s infinite;
+}
+.co-overlay .re-text {
+  animation: m-slam 0.8s ease-out 0.2s backwards;
+}
+.co-overlay .re-subtext {
+  animation:
+    m-fade 0.3s var(--ease-out) 0.45s backwards,
+    m-rise 0.8s var(--spring) 0.45s backwards;
+}
+/* the final drawdown */
+.co-overlay .fs-title {
+  animation:
+    m-slam 0.8s ease-out 0.1s backwards,
+    m-shake 0.4s linear 0.55s;
+}
+@keyframes m-shake {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  20% {
+    translate: -6px 0;
+  }
+  40% {
+    translate: 5px 0;
+  }
+  60% {
+    translate: -3px 0;
+  }
+  80% {
+    translate: 2px 0;
+  }
+}
+.fs-description {
+  translate: -30px 0;
+  scale: 0.9;
+  transition:
+    opacity 0.5s var(--ease-out),
+    translate 0.7s var(--spring),
+    scale 0.7s var(--spring);
+}
+.fs-description.visible {
+  translate: 0 0;
+  scale: 1;
+}
+.fs-description.visible .fs-description-icon {
+  animation: m-jelly 0.7s ease-out 0.1s backwards;
+}
+.fs-current-word,
+.ft-current-word {
+  animation:
+    m-fade 0.2s var(--ease-out) 0.3s backwards,
+    m-jelly 0.8s ease-out 0.3s backwards;
+}
+.ft-big-check {
+  animation: m-stamp 0.7s ease-out 0.15s backwards;
+}
+
+/* --- between rounds --- */
+.sc-round-header,
+.sm-page-header {
+  transform-origin: 50% 100%;
+  animation:
+    m-fade 0.3s var(--ease-out) backwards,
+    m-drop 0.9s backwards;
+}
+.sc-round-line,
+.sm-header-line {
+  animation: m-grow-x 0.8s var(--spring) 0.2s backwards;
+}
+.sc-root > .sc-team-columns > .sc-team-column,
+.sm-team-column {
+  animation:
+    m-fade 0.3s var(--ease-out) 0.2s backwards,
+    m-slide-x 0.9s var(--spring) 0.2s backwards;
+  --m-from: -70px;
+  --m-tilt: -6deg;
+}
+.sc-root > .sc-team-columns > .sc-team-column:nth-child(2),
+.sm-team-column:nth-child(2) {
+  --m-from: 70px;
+  --m-tilt: 6deg;
+}
+.sc-fade-enter-active {
+  transition: none;
+  animation:
+    m-fade 0.35s var(--ease-out) backwards,
+    m-rise 0.8s var(--spring) backwards;
+}
+.sc-fade-leave-active {
+  transition:
+    opacity 0.2s var(--ease-in),
+    scale 0.2s var(--ease-in);
+}
+.sc-fade-enter-from,
+.sc-fade-leave-to {
+  opacity: 0;
+}
+.sc-fade-leave-to {
+  scale: 0.85;
+}
+.sc-on-deck {
+  animation:
+    m-fade 0.25s var(--ease-out) backwards,
+    m-jelly 0.7s ease-out backwards;
+  animation-delay: var(--m-o, 0.25s);
+}
+.sc-on-deck:nth-child(3) {
+  --m-o: 0.32s;
+}
+.sc-on-deck:nth-child(4) {
+  --m-o: 0.39s;
+}
+.sc-on-deck:nth-child(n + 5) {
+  --m-o: 0.46s;
+}
+/* readying up gives your name a happy squish */
+.sc-drawer-name.sc-readied,
+.sc-on-deck.sc-readied {
+  animation: m-jelly 0.6s ease-out;
+}
+.sc-team-board {
+  animation:
+    m-fade 0.3s var(--ease-out) 0.3s backwards,
+    m-sticker 0.85s var(--spring) 0.3s backwards;
+  --m-tilt: -5deg;
+}
+.sc-team-board:nth-child(2) {
+  animation-delay: 0.4s;
+  --m-tilt: 5deg;
+}
+/* "the final drawdown!" crashes in, shakes, then keeps throbbing */
+.sc-final-title {
+  animation: m-throb 1.8s ease-in-out infinite;
+}
+.sc-final-enter-active {
+  transition: none;
+  animation: m-final-slam 1.2s ease-out 0.6s backwards;
+}
+@keyframes m-final-slam {
+  0% {
+    opacity: 0;
+    scale: 4;
+    rotate: -14deg;
+    filter: blur(10px);
+  }
+  40% {
+    opacity: 1;
+    scale: 0.82;
+    rotate: 5deg;
+    filter: blur(0);
+  }
+  52% {
+    translate: 0 0;
+    scale: 1.14;
+    rotate: -3deg;
+  }
+  60% {
+    translate: -7px 0;
+  }
+  68% {
+    translate: 6px 0;
+    scale: 0.97;
+    rotate: 1deg;
+  }
+  76% {
+    translate: -4px 0;
+  }
+  84% {
+    translate: 2px 0;
+    scale: 1.02;
+    rotate: 0deg;
+  }
+  100% {
+    translate: 0 0;
+    scale: 1;
+    rotate: 0deg;
+    filter: blur(0);
+  }
+}
+
+/* --- the final results --- */
+.sm-fade-enter-active {
+  transition: none;
+  animation:
+    m-fade 0.35s var(--ease-out) backwards,
+    m-rise 0.9s var(--spring) backwards;
+}
+.sm-trophy {
+  animation:
+    m-trophy-in 1s ease-out backwards,
+    m-float 3.2s ease-in-out 1.1s infinite;
+}
+/* (listing the running animations again keeps them going while the shake plays) */
+.sm-trophy:hover {
+  animation:
+    m-trophy-in 1s ease-out backwards,
+    m-float 3.2s ease-in-out 1.1s infinite,
+    sm-shake 0.4s linear;
+}
+.sm-winner-text {
+  animation: m-slam 0.8s ease-out 0.25s backwards;
+}
+.sm-winning-user {
+  animation:
+    m-fade 0.25s var(--ease-out) backwards,
+    m-jelly 0.7s ease-out backwards;
+  animation-delay: var(--m-w, 0.5s);
+}
+.sm-winning-user:nth-child(2) {
+  --m-w: 0.58s;
+}
+.sm-winning-user:nth-child(3) {
+  --m-w: 0.66s;
+}
+.sm-winning-user:nth-child(n + 4) {
+  --m-w: 0.74s;
+}
+.sm-scores {
+  perspective: 800px;
+}
+.sm-scores-title {
+  animation:
+    m-fade 0.4s var(--ease-out) backwards,
+    m-rise 0.8s var(--spring) backwards;
+}
+/* score rows flip down like cards, one after another */
+.sm-score-row {
+  transform-origin: 50% 0;
+  animation:
+    m-fade 0.3s var(--ease-out) backwards,
+    m-flip 0.8s var(--spring) backwards;
+  animation-delay: calc(var(--i, 0) * 80ms + 0.25s);
+}
+@keyframes m-flip {
+  from {
+    translate: 0 -8px;
+    rotate: x -85deg;
+  }
+}
+.sm-score-delta {
+  animation: m-jelly 0.7s ease-out backwards;
+  animation-delay: calc(var(--i, 0) * 80ms + 0.6s);
+}
+/* flipping through the recap deals the boards out like cards */
+.sm-team-board-column {
+  animation:
+    m-fade 0.3s var(--ease-out) backwards,
+    m-sticker 0.8s var(--spring) backwards;
+  --m-tilt: -5deg;
+}
+.sm-team-board-column:nth-child(2) {
+  animation-delay: 0.08s;
+  --m-tilt: 5deg;
+}
+
+/* --- lobbies page --- */
+.lb-list-enter-active {
+  animation:
+    m-fade 0.3s var(--ease-out) backwards,
+    m-sticker 0.85s var(--spring) backwards;
+  animation-delay: var(--m-l, 0s);
+  --m-tilt: -5deg;
+}
+.lb-list-enter-active:nth-child(even) {
+  --m-tilt: 5deg;
+}
+.lb-list-enter-active:nth-child(2) {
+  --m-l: 0.06s;
+}
+.lb-list-enter-active:nth-child(3) {
+  --m-l: 0.12s;
+}
+.lb-list-enter-active:nth-child(4) {
+  --m-l: 0.18s;
+}
+.lb-list-enter-active:nth-child(n + 5) {
+  --m-l: 0.24s;
+}
+.lb-list-leave-active {
+  position: absolute;
+  width: 100%;
+  animation: m-pop-out 0.28s var(--ease-back-in) forwards;
+}
+.lb-card.lb-list-move {
+  transition: transform 0.5s var(--spring);
+}
+
+/* --- stats and quick switch pages --- */
+.stt-card {
+  animation:
+    m-fade 0.35s var(--ease-out) backwards,
+    m-sticker 0.9s var(--spring) backwards;
+  animation-delay: var(--m-c, 0.2s);
+  --m-tilt: -6deg;
+}
+.stt-card:nth-child(even) {
+  --m-tilt: 6deg;
+}
+.stt-card:nth-child(2) {
+  --m-c: 0.27s;
+}
+.stt-card:nth-child(3) {
+  --m-c: 0.34s;
+}
+.stt-card:nth-child(4) {
+  --m-c: 0.41s;
+}
+.stt-card:nth-child(n + 5) {
+  --m-c: 0.48s;
+}
+.stt-bar-fill {
+  transform-origin: 0 50%;
+  transition: width 0.9s var(--ease-out);
+  animation: m-grow-x 1.1s var(--spring-soft) 0.6s backwards;
+}
+.stt-row {
+  animation:
+    m-fade 0.3s var(--ease-out) backwards,
+    m-slide-x 0.7s var(--spring) backwards;
+  animation-delay: var(--m-r, 0.4s);
+  --m-from: -30px;
+  --m-tilt: 0deg;
+}
+.stt-row:nth-child(3) {
+  --m-r: 0.45s;
+}
+.stt-row:nth-child(4) {
+  --m-r: 0.5s;
+}
+.stt-row:nth-child(5) {
+  --m-r: 0.55s;
+}
+.stt-row:nth-child(n + 6) {
+  --m-r: 0.6s;
+}
+
+/* --- hover and focus: cards, rows, pills, inputs, links --- */
 a {
   transition: color var(--t-fast) ease;
 }
@@ -5309,7 +6244,7 @@ a {
   box-shadow: 0 4px 12px #00000022;
 }
 .qsw-chip {
-  animation: pop-in 0.35s var(--ease-spring) both;
+  animation: m-jelly 0.6s ease-out backwards;
 }
 .qsw-x {
   transition:
@@ -5356,61 +6291,14 @@ input[type='checkbox']:not(:disabled):active {
   transform: scale(0.9);
 }
 
-/* small things that appear */
+/* --- small things that appear --- */
 .away-icon,
 .snooze-icon,
 .disconnect-icon {
-  animation: pop-in 0.4s var(--ease-spring) both;
+  animation: m-jelly 0.6s ease-out backwards;
 }
 .rating {
-  animation: fade-in 0.4s ease both;
-}
-.sm-score-row {
-  animation: row-in 0.5s var(--ease-out) both;
-  animation-delay: calc(var(--i, 0) * 70ms + 150ms);
-}
-@keyframes row-in {
-  from {
-    opacity: 0;
-    transform: translateX(-18px);
-  }
-}
-.sm-score-delta {
-  animation: pop-in 0.45s var(--ease-spring) both;
-  animation-delay: calc(var(--i, 0) * 70ms + 350ms);
-}
-.sm-scores-title {
-  animation: fade-in 0.5s var(--ease-out) both;
-}
-.stt-card {
-  animation: fade-in 0.55s var(--ease-out) both;
-}
-.stt-card:nth-child(2) {
-  animation-delay: 0.05s;
-}
-.stt-card:nth-child(3) {
-  animation-delay: 0.1s;
-}
-.stt-card:nth-child(4) {
-  animation-delay: 0.15s;
-}
-.stt-card:nth-child(5) {
-  animation-delay: 0.2s;
-}
-.qsw-card {
-  animation: fade-in 0.55s var(--ease-out) both;
-}
-.qsw-card:nth-child(3) {
-  animation-delay: 0.06s;
-}
-.qsw-card:nth-child(4) {
-  animation-delay: 0.12s;
-}
-.qsw-card:nth-child(5) {
-  animation-delay: 0.18s;
-}
-.stt-bar-fill {
-  transition: width 0.9s var(--ease-out);
+  animation: m-fade 0.4s ease backwards;
 }
 .gt-item {
   transition: transform var(--t-med) var(--ease-out);
@@ -5442,9 +6330,20 @@ input[type='checkbox']:not(:disabled):active {
   }
 }
 
-/* theme switch: one smooth cross-fade of the whole page */
+/* theme switch: the new theme spreads out in a circle from the toggle (theme.js sets the centre and radius) */
 ::view-transition-old(root),
 ::view-transition-new(root) {
-  animation-duration: 0.4s;
-  animation-timing-function: var(--ease-out);
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(root) {
+  animation: m-theme-reveal 0.65s var(--ease-out);
+}
+@keyframes m-theme-reveal {
+  from {
+    clip-path: circle(0 at var(--vt-x, 50%) var(--vt-y, 0%));
+  }
+  to {
+    clip-path: circle(var(--vt-r, 150vmax) at var(--vt-x, 50%) var(--vt-y, 0%));
+  }
 }

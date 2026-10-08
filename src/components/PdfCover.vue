@@ -19,7 +19,11 @@ const drawn = new Map(); // page number -> width it was drawn for
 const visible = new Set();
 let resizeTimer;
 
-const columnWidth = () => Math.min(1000, Math.max(200, (root.value?.clientWidth ?? window.innerWidth) - 24));
+const layoutTick = ref(0); // bumped on resize so the page boxes below re-measure
+const columnWidth = () => {
+  void layoutTick.value;
+  return Math.min(1000, Math.max(200, (root.value?.clientWidth ?? window.innerWidth) - 24));
+};
 const heightFor = (p) => Math.round((columnWidth() * p.h) / p.w);
 
 async function draw(n) {
@@ -82,6 +86,7 @@ async function load() {
 function onResize() {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
+    layoutTick.value++;
     drawn.clear();
     for (const n of visible) void draw(n);
   }, 200);

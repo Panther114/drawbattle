@@ -21,7 +21,7 @@ onUnmounted(() => document.body.classList.remove('body-modal-open'));
       <div class="modal-backdrop" @click="close" />
       <div class="modal-body" :class="{ wide }">
         <div class="modal-contents"><slot /></div>
-        <button class="modal-close" @click="close" />
+        <button type="button" class="modal-close" aria-label="close" @click="close" />
       </div>
     </div>
   </Teleport>

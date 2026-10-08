@@ -102,6 +102,7 @@ const finalRef = ref();
 const clockOffset = ref(0); // Date.now() - serverNow
 let tickTimer;
 let pingTimer;
+let unmounted = false;
 let wasLive = false; // true once this tab has been connected to the game as part of the session (for local stats)
 
 const currentRound = computed(() => game.value?.currentRound);
@@ -647,10 +648,12 @@ onMounted(async () => {
   trackPresence();
   if (props.summaryUrl !== undefined) {
     const res = await fetch(props.summaryUrl);
-    game.value = await res.json();
+    const data = await res.json();
+    if (!unmounted) game.value = data;
     return;
   }
   const g = await fetchGame('guesses');
+  if (unmounted) return; // left the page while the game was loading
   if (g !== undefined) {
     game.value = g;
     if (!isGameEnded(g) && socket === undefined && g.users[userId.value] != null) connect(Conn.AutoConnectingAsExistingUser);
@@ -664,6 +667,7 @@ onMounted(async () => {
   }, 100);
 });
 onUnmounted(() => {
+  unmounted = true;
   teardown();
   if (tickTimer !== undefined) clearInterval(tickTimer);
 });
@@ -697,7 +701,7 @@ watch(view, (v) => {
     <div class="game-info">
       <div v-if="game && game.connectedAppInfo === undefined" class="game-info-row">
         <span>game {{ game.settings.streamerMode ? '****' : gameId.toUpperCase() }}</span>
-        <router-link v-tooltip="'leave game'" to="/" class="leave-link" />
+        <router-link v-tooltip="'leave game'" to="/" class="leave-link" aria-label="leave game" />
       </div>
       <div class="game-info-row">
         <template v-if="!isIOS()">
@@ -705,7 +709,7 @@ watch(view, (v) => {
           <SoundToggle class="sound-toggle-pos" :enabled="soundsEnabled" @toggle="soundsEnabled = !soundsEnabled" />
         </template>
         <ThemeToggle class="sound-toggle-pos" />
-        <button v-if="qs.enabled" v-tooltip="'quick switch'" class="qs-trigger" aria-label="quick switch" @click="toggleQuick"><Icon name="bolt" /></button>
+        <button v-if="qs.enabled" v-tooltip="'quick switch'" type="button" class="qs-trigger" aria-label="quick switch" @click="toggleQuick"><Icon name="bolt" /></button>
       </div>
     </div>
 

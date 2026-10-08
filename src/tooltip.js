@@ -15,8 +15,15 @@ function show(el, value) {
   if (value && typeof value === 'object' && value.content !== undefined) tip.innerHTML = value.content;
   else tip.textContent = String(value);
   const r = el.getBoundingClientRect();
-  tip.style.left = `${r.left + r.width / 2}px`;
-  tip.style.top = `${r.top}px`;
+  // keep the tip inside the window: below the element when there is no room above, nudged in from the side edges
+  const below = r.top < tip.offsetHeight + 16;
+  const half = tip.offsetWidth / 2 + 6;
+  const cx = r.left + r.width / 2;
+  const left = Math.min(Math.max(cx, half), Math.max(half, window.innerWidth - half));
+  tip.classList.toggle('below', below);
+  tip.style.left = `${left}px`;
+  tip.style.top = `${below ? r.bottom : r.top}px`;
+  tip.style.setProperty('--ax', `${cx - left}px`);
   tip.classList.add('show');
 }
 function hide() {

@@ -21,7 +21,7 @@ defineProps({
       <div class="rh-title">{{ displayName(users[round.chooserId]) }}'s head start</div>
       <div class="rh-timer">
         <div class="rh-timer-icon" />
-        <div>{{ roundStageSecondsRemaining }}</div>
+        <div :key="roundStageSecondsRemaining" class="m-tick">{{ roundStageSecondsRemaining }}</div>
       </div>
     </div>
   </CanvasOverlay>

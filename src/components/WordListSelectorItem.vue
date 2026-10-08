@@ -16,9 +16,10 @@ const rotation = Math.floor(160 * Math.random()) / 100 - 0.8;
 
 <template>
   <button
+    type="button"
     class="wp-item"
     :class="{ selected }"
-    :style="{ transform: rotate ? `rotate(${rotation}deg)` : undefined }"
+    :style="{ rotate: rotate ? `${rotation}deg` : undefined }"
     :disabled="disabled"
     @click="$emit('select-list')"
   >

@@ -144,7 +144,7 @@ const startDisabled = computed(
           <div class="lobby-team-line" />
           <TransitionGroup name="lu" tag="div" class="lobby-users">
             <div v-for="uid in everyone" :key="uid" class="lobby-user" :class="{ submitted: fishbowlWords !== undefined && fishbowlWords[uid] !== undefined }">
-              <span v-if="uid === userId">{{ cleanName || 'anonymous' }} (you)<sup v-if="users[uid]" class="rating">{{ users[uid].rating }}</sup></span>
+              <span v-if="uid === userId">{{ cleanName || 'anonymous' }} (you)<sup v-if="users[uid]?.rating !== undefined" class="rating">{{ users[uid].rating }}</sup></span>
               <Username v-else :user="users[uid]" />
             </div>
           </TransitionGroup>
@@ -162,7 +162,7 @@ const startDisabled = computed(
               class="lobby-user"
               :class="{ submitted: fishbowlWords !== undefined && fishbowlWords[uid] !== undefined }"
             >
-              <span v-if="uid === userId">{{ cleanName || 'anonymous' }} (you)<sup v-if="users[uid]" class="rating">{{ users[uid].rating }}</sup></span>
+              <span v-if="uid === userId">{{ cleanName || 'anonymous' }} (you)<sup v-if="users[uid]?.rating !== undefined" class="rating">{{ users[uid].rating }}</sup></span>
               <Username v-else :user="users[uid]" />
             </div>
           </TransitionGroup>
@@ -196,7 +196,7 @@ const startDisabled = computed(
           </Btn>
           <div class="lobby-start-subtext">
             <template v-if="needsPlayers">{{ randomTeams ? 'random teams need at least 4 players' : 'each team needs at least 2 players' }}</template>
-            <button v-if="!isSpectator && starting" class="lobby-cancel" @click="cancelStart">cancel</button>
+            <button v-if="!isSpectator && starting" type="button" class="lobby-cancel" @click="cancelStart">cancel</button>
           </div>
         </div>
         <Settings

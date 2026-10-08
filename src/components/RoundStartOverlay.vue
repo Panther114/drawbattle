@@ -132,7 +132,7 @@ function streakInfo() {
         "
         class="rs-top-right-countdown"
       >
-        {{ roundStageSecondsRemaining }}
+        <span :key="roundStageSecondsRemaining" class="m-tick">{{ roundStageSecondsRemaining }}</span>
       </div>
     </template>
 
@@ -155,7 +155,7 @@ function streakInfo() {
         "
         class="rs-draw-countdown"
       >
-        {{ roundStageSecondsRemaining }}
+        <span :key="roundStageSecondsRemaining" class="m-tick">{{ roundStageSecondsRemaining }}</span>
       </div>
     </template>
   </CanvasOverlay>

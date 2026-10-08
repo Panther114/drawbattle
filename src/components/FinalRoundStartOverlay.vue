@@ -46,7 +46,7 @@ const nextId = computed(() => nextDrawer(props.teams[props.teamIndex], props.use
     <Transition mode="out-in" name="fade">
       <div v-if="subStage === SUB.Countdown" key="countdown">
         <div class="fs-countdown" :class="{ visible: finalRoundStage === FinalRoundStage.StartCountdown }">
-          {{ finalRoundStageSecondsRemaining }}
+          <span :key="finalRoundStageSecondsRemaining" class="m-tick">{{ finalRoundStageSecondsRemaining }}</span>
         </div>
         <div class="fs-bottom-text">
           <template v-if="firstDrawer === userId">

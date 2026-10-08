@@ -199,15 +199,17 @@ const why = (r) => {
         <div class="sm-recap-header">
           <div class="sm-recap-label">game recap</div>
           <div class="sm-word-select-row">
-            <button class="sm-word-arrow prev" :disabled="wordIndex <= 0" @click="wordIndex = Math.max(wordIndex - 1, 0)" />
+            <button type="button" class="sm-word-arrow prev" aria-label="previous word" :disabled="wordIndex <= 0" @click="wordIndex = Math.max(wordIndex - 1, 0)" />
             <div class="sm-word-select-wrapper">
               <div class="sm-word-select-text">{{ recapWords[wordIndex] }}</div>
-              <select v-model.number="wordIndex" class="sm-word-select">
+              <select v-model.number="wordIndex" class="sm-word-select" aria-label="word">
                 <option v-for="(w, i) in recapWords" :key="i" :value="i">{{ w }}</option>
               </select>
             </div>
             <button
+              type="button"
               class="sm-word-arrow next"
+              aria-label="next word"
               :disabled="wordIndex >= recapWords.length - 1"
               @click="wordIndex = Math.min(wordIndex + 1, recapWords.length - 1)"
             />

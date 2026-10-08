@@ -108,15 +108,23 @@ open, so it appears instantly. It is shown or hidden with:
 Everything stays on your device: the settings are in localStorage and a chosen file is kept in your browser's IndexedDB.
 Some websites forbid being shown inside another page, so there is a **pop-up window** mode that opens it in its own screen-sized window.
 
-### smooth motion
+### cute, bouncy motion
 
-Everything that changes state is animated with one shared set of curves and timings (see the motion block at the end of
-`src/style.css`): pages and game screens fade and rise into place, the chat grows out of its pill and its messages slide in,
-dialogs scale in and out, switching between random and manual teams cross-fades the lists while players glide into their
-spots, cards and buttons lift on hover, inputs glow on focus and score rows stagger in. Switching themes cross-fades the
-whole page on wide screens (phones switch at once), and quick switch is deliberately instant, with no animation at all.
-Only opacity and transform are animated, and players who ask their system for **reduced motion** get none of it.
-Frame pacing was checked in headless Edge with a 4x CPU slowdown at desktop and phone sizes.
+The whole UI moves like a sticker book (the motion block at the end of `src/style.css`). The title drops in letter by
+letter and a little wave runs along it every few seconds; page pieces float up one after another while the navigation
+pills skip in from the side; buttons and players plop in like jelly with a squash and stretch; lobby teams, stats cards and
+lobby cards get slapped down at a tilt; dialogs bounce up from below and tip away when closed; the chat bounces out of its
+corner and its messages bubble up; point toasts zoom in from the side. In a game the drawers' names swing in from both
+sides while the duel badge crashes down between them, word choices pop one by one with a bobbing arrow on the chosen
+one, every countdown number lands with a thump, the trophy bursts out spinning and keeps wiggling, and "the final
+drawdown!" crashes onto the screen out of a blur and shakes. Score rows flip down like cards and the recap deals its
+boards out like cards. Switching themes spreads the new theme out in a circle from the toggle on wide screens (phones
+switch at once), and quick switch is deliberately instant, with no animation at all.
+
+Springs use CSS `linear()` easing (with a cubic stand-in for older browsers). Entrances only animate opacity and the
+individual `translate` / `scale` / `rotate` properties, so they sit on top of each element's own tilt and hover effect;
+page containers only fade, so the fixed navigation never jumps, and nothing holding the live drawing canvas is scaled.
+Players who ask their system for **reduced motion** get none of it.
 
 ### dark mode
 

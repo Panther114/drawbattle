@@ -11,9 +11,9 @@ defineProps({ label: { type: Boolean, default: false } });
     :class="theme.dark ? 'is-dark' : 'is-light'"
     :aria-label="theme.dark ? 'switch to light mode' : 'switch to dark mode'"
     :aria-pressed="theme.dark"
-    @click="toggleTheme"
+    @click="toggleTheme($event)"
   >
-    <Icon :name="theme.dark ? 'sun' : 'moon'" class="theme-icon" />
+    <Icon :key="theme.dark ? 'sun' : 'moon'" :name="theme.dark ? 'sun' : 'moon'" class="theme-icon" />
     <span v-if="label">{{ theme.dark ? 'light mode' : 'dark mode' }}</span>
   </button>
 </template>

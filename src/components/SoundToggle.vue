@@ -4,5 +4,12 @@ defineEmits(['toggle']);
 </script>
 
 <template>
-  <button class="sound-toggle" :class="enabled ? 'on' : 'off'" @click="$emit('toggle')" />
+  <button
+    type="button"
+    class="sound-toggle"
+    :class="enabled ? 'on' : 'off'"
+    :aria-label="enabled ? 'turn sounds off' : 'turn sounds on'"
+    :aria-pressed="enabled"
+    @click="$emit('toggle')"
+  />
 </template>

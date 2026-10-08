@@ -24,9 +24,12 @@ const picking = ref(false); // the "choose a game code" panel under the new game
 const newCode = ref('');
 const codeInput = ref();
 const errorFromGame = takeJoinError();
+// the title drops in letter by letter, each from its own little tilt
+const TITLE = [...'draw battle!'].map((ch, i) => ({ ch, tilt: `${((i * 7) % 5) * 6 - 12}deg` }));
 
 watch(joinCode, (v) => {
   if (v !== v.trim()) joinCode.value = v.trim();
+  joinError.value = undefined; // typing a new code clears the old "doesn't exist" message
 });
 
 watch(newCode, (v) => {
@@ -75,15 +78,22 @@ async function newGame() {
   track('click new game button', { 'word list id': listId.value });
   busy.value = true;
   createError.value = undefined;
-  const res = await fetch(`${API}/games`, {
-    body: JSON.stringify({
-      wordListId: props.wordListId,
-      code: newCode.value || undefined,
-      streamerMode: storage?.getItem('streamerMode') === '1' || undefined,
-    }),
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
+  let res;
+  try {
+    res = await fetch(`${API}/games`, {
+      body: JSON.stringify({
+        wordListId: props.wordListId,
+        code: newCode.value || undefined,
+        streamerMode: storage?.getItem('streamerMode') === '1' || undefined,
+      }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch {
+    busy.value = false; // network failure: unlock the buttons again
+    createError.value = 'could not reach the server';
+    return;
+  }
   busy.value = false;
   if (res.status >= 400) {
     const text = await res.text();
@@ -98,10 +108,16 @@ async function joinGame() {
   if (busy.value) return;
   track('click join game button', { 'game id': joinCode.value });
   busy.value = true;
-  const res = await fetch(`${API}/games/${joinCode.value}`, {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
-  });
+  let res;
+  try {
+    res = await fetch(`${API}/games/${encodeURIComponent(joinCode.value)}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch {
+    busy.value = false; // network failure: unlock the buttons again
+    return;
+  }
   busy.value = false;
   if (res.status === 200) router.push({ name: 'Game', params: { gameId: joinCode.value.toUpperCase() } });
   else joinError.value = [JoinStatus.Nonexistent, joinCode.value];
@@ -116,7 +132,10 @@ async function joinGame() {
     </TopNav>
     <div v-if="errorFromGame" class="hm-join-error-from-game">{{ errorText(errorFromGame.status, errorFromGame.gameId, errorFromGame.reason) }}</div>
     <div class="hm-title">
-      <span class="hm-title-text">draw battle!<span class="hm-edition">Gavania edition</span></span>
+      <span class="hm-title-text" role="heading" aria-level="1" aria-label="draw battle! Gavania edition"
+        ><span v-for="(l, i) in TITLE" :key="i" class="hm-letter" aria-hidden="true" :style="{ '--i': i, '--r': l.tilt }">{{ l.ch }}</span
+        ><span class="hm-edition" aria-hidden="true">Gavania edition</span></span
+      >
     </div>
     <div class="hm-tagline">two teams of drawers face off with a frantic final round</div>
     <HomeWordPackUnit v-if="listId !== undefined" :word-list="list" />
@@ -164,7 +183,7 @@ async function joinGame() {
         />
         <div class="hm-join-input-line" />
         <div v-if="joinError" class="hm-inline-join-error">{{ errorText(joinError[0], joinError[1]) }}</div>
-        <Btn type="submit" :disabled="joinCode.length !== 4" :force-rotation="3" color="purple" icon="enter" class="hm-join-button">
+        <Btn type="submit" :disabled="joinCode.length !== 4 || busy" :force-rotation="3" color="purple" icon="enter" class="hm-join-button">
           join game
         </Btn>
       </form>

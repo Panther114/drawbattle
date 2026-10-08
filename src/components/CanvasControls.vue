@@ -16,6 +16,8 @@ const WIDTHS = [1, 2, 3, 4];
     <div class="cc-tool-row">
       <button
         v-tooltip="'pencil'"
+        type="button"
+        aria-label="pencil"
         class="cc-tool pencil"
         :class="{ selected: drawerTool === 'pencil' }"
         @click="$emit('pencil-click')"
@@ -23,13 +25,15 @@ const WIDTHS = [1, 2, 3, 4];
       <button
         v-if="rules.allowEraser"
         v-tooltip="'eraser'"
+        type="button"
+        aria-label="eraser"
         class="cc-tool eraser"
         :class="{ selected: drawerTool === 'eraser' }"
         @click="$emit('eraser-click')"
       />
-      <button v-if="rules.allowClear" v-tooltip="'clear drawing'" class="cc-tool clear" @click="$emit('clear-click')" />
+      <button v-if="rules.allowClear" v-tooltip="'clear drawing'" type="button" aria-label="clear drawing" class="cc-tool clear" @click="$emit('clear-click')" />
       <div v-tooltip="'change size'" class="cc-widths">
-        <button v-for="w in WIDTHS" :key="w" class="cc-width" @click="$emit('stroke-width-click', w)">
+        <button v-for="w in WIDTHS" :key="w" type="button" :aria-label="'stroke size ' + w" class="cc-width" @click="$emit('stroke-width-click', w)">
           <div class="cc-width-circle" :class="['w' + w, { selected: drawerStrokeWidth === w }]" />
         </button>
       </div>
@@ -38,6 +42,8 @@ const WIDTHS = [1, 2, 3, 4];
       <button
         v-for="c in COLORS"
         :key="c"
+        type="button"
+        :aria-label="'colour ' + c"
         class="cc-color"
         :class="{ selected: drawerColor === c }"
         :style="{ backgroundColor: '#' + c, boxShadow: drawerColor === c ? '0 0 6px #00000060' : '' }"
