@@ -709,6 +709,7 @@ watch(view, (v) => {
       </div>
     </div>
 
+    <Transition name="view" mode="out-in">
     <div v-if="view === 'empty'" />
     <GameSummary
       v-else-if="view === 'summary'"
@@ -809,6 +810,7 @@ watch(view, (v) => {
       @canvas-operation="sendCanvasOp"
       @audio-cue="audioCue"
     />
+    </Transition>
     <GameChat
       v-if="game && isConnected && view !== 'empty'"
       :game="game"

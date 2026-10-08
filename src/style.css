@@ -4964,3 +4964,480 @@ body {
   font-size: 19px;
   padding: 6px 22px;
 }
+
+/* ===== motion =====
+   One set of curves and timings for the whole UI. Only opacity / transform / colour-like properties animate,
+   so everything stays on the compositor and smooth. Reduced-motion players get none of it (end of block). */
+:root {
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --t-fast: 0.16s;
+  --t-med: 0.28s;
+  --t-slow: 0.45s;
+}
+html {
+  scroll-behavior: smooth;
+}
+
+/* switching theme: colours glide instead of snapping */
+.theme-fade,
+.theme-fade *,
+.theme-fade *::before,
+.theme-fade *::after {
+  transition:
+    background-color 0.4s ease,
+    color 0.4s ease,
+    border-color 0.4s ease,
+    fill 0.4s ease,
+    stroke 0.4s ease,
+    box-shadow 0.4s ease !important;
+}
+
+/* pages and game screens */
+.page-enter-active {
+  transition:
+    opacity var(--t-med) var(--ease-out),
+    transform 0.4s var(--ease-out);
+}
+.page-leave-active {
+  transition:
+    opacity 0.12s var(--ease-in),
+    transform 0.12s var(--ease-in);
+}
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.view-enter-active {
+  transition:
+    opacity var(--t-med) var(--ease-out),
+    transform 0.4s var(--ease-out);
+}
+.view-leave-active {
+  transition: opacity 0.12s var(--ease-in);
+}
+.view-enter-from {
+  opacity: 0;
+  transform: translateY(12px) scale(0.99);
+}
+.view-leave-to {
+  opacity: 0;
+}
+
+/* lobby: random <-> manual teams, and players arriving / leaving */
+.lobby-swap-enter-active {
+  transition:
+    opacity 0.32s var(--ease-out),
+    transform 0.42s var(--ease-out);
+}
+.lobby-swap-leave-active {
+  transition:
+    opacity 0.14s var(--ease-in),
+    transform 0.14s var(--ease-in);
+}
+.lobby-swap-enter-from {
+  opacity: 0;
+  transform: translateY(14px) scale(0.97);
+}
+.lobby-swap-leave-to {
+  opacity: 0;
+  transform: scale(0.97);
+}
+.lobby-users {
+  position: relative;
+}
+.lu-enter-active {
+  transition:
+    opacity 0.35s var(--ease-out),
+    transform 0.45s var(--ease-spring);
+}
+.lu-leave-active {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transition:
+    opacity 0.2s var(--ease-in),
+    transform 0.2s var(--ease-in);
+}
+.lu-move {
+  transition: transform 0.45s var(--ease-out);
+}
+.lu-enter-from {
+  opacity: 0;
+  transform: translateY(10px) scale(0.9);
+}
+.lu-leave-to {
+  opacity: 0;
+  transform: translateX(-14px) scale(0.95);
+}
+.lobby-user {
+  transition: color var(--t-fast) ease;
+}
+.lobby-random-note,
+.lobby-start-subtext {
+  animation: fade-in 0.5s var(--ease-out) both;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+/* chat: pill <-> panel, tabs, messages, badge */
+.gc {
+  transform-origin: bottom right;
+}
+.gc-swap-enter-active {
+  transition:
+    opacity 0.26s var(--ease-out),
+    transform 0.38s var(--ease-spring);
+  transform-origin: bottom right;
+}
+.gc-swap-leave-active {
+  transition:
+    opacity 0.12s var(--ease-in),
+    transform 0.14s var(--ease-in);
+  transform-origin: bottom right;
+}
+.gc-swap-enter-from {
+  opacity: 0;
+  transform: translateY(14px) scale(0.86);
+}
+.gc-swap-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.9);
+}
+.gc-chat,
+.gc-players {
+  animation: tab-in 0.3s var(--ease-out) both;
+}
+@keyframes tab-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.gc-msg,
+.gc-sys {
+  animation: msg-in 0.34s var(--ease-out) both;
+}
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+.gc-badge {
+  animation: pop-in 0.35s var(--ease-spring) both;
+}
+.gc-pill {
+  transition:
+    transform var(--t-med) var(--ease-spring),
+    box-shadow var(--t-med) ease,
+    background-color var(--t-fast) ease;
+}
+.gc-pill:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px #00000033;
+}
+.gc-pill:active {
+  transform: scale(0.96);
+}
+.gc-tabs button {
+  position: relative;
+  transition:
+    color var(--t-fast) ease,
+    background-color var(--t-fast) ease,
+    transform var(--t-fast) ease;
+}
+.gc-tabs button:hover {
+  transform: translateY(-1px);
+}
+.gc-min,
+.gc-send,
+.gp-kick,
+.gp-appeal {
+  transition:
+    transform var(--t-fast) var(--ease-spring),
+    background-color var(--t-fast) ease,
+    border-color var(--t-fast) ease,
+    color var(--t-fast) ease,
+    opacity var(--t-fast) ease;
+}
+.gc-send:not(:disabled):hover,
+.gp-kick:hover,
+.gp-appeal:hover {
+  transform: translateY(-1px) scale(1.04);
+}
+.gc-send:not(:disabled):active,
+.gp-kick:active,
+.gp-appeal:active {
+  transform: scale(0.95);
+}
+.gc-input {
+  transition:
+    border-color var(--t-fast) ease,
+    box-shadow var(--t-med) ease,
+    background-color var(--t-fast) ease;
+}
+.gc-input:focus {
+  box-shadow: 0 0 0 3px #87e0ff55;
+}
+.gp-row {
+  transition: background-color var(--t-fast) ease;
+  border-radius: 8px;
+}
+.gp-row:hover {
+  background-color: var(--glass-a0);
+}
+
+/* modal dialogs */
+.modal-backdrop {
+  animation: backdrop-in 0.25s ease both;
+}
+.modal-body {
+  animation: modal-in 0.4s var(--ease-spring) both;
+}
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.94);
+  }
+}
+.modal-container.closing .modal-backdrop {
+  animation: backdrop-out 0.17s ease both;
+}
+.modal-container.closing .modal-body {
+  animation: modal-out 0.17s var(--ease-in) both;
+}
+@keyframes backdrop-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes modal-out {
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+}
+.modal-close {
+  transition: transform var(--t-med) var(--ease-spring);
+}
+.modal-close:hover {
+  transform: rotate(90deg) scale(1.1);
+}
+
+/* hover and focus: cards, rows, pills, inputs, links */
+a {
+  transition: color var(--t-fast) ease;
+}
+.stt-card,
+.qsw-card,
+.lb-card,
+.st-table {
+  transition:
+    transform var(--t-med) var(--ease-out),
+    box-shadow var(--t-med) ease,
+    border-color var(--t-med) ease;
+}
+.stt-card:hover,
+.qsw-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px #00000022;
+  border-color: #80808066;
+}
+.stt-row,
+.lb-player,
+.st-item,
+.sm-score-row {
+  transition:
+    background-color var(--t-fast) ease,
+    transform var(--t-med) var(--ease-out);
+}
+.stt-row:hover {
+  transform: translateX(3px);
+}
+.wp-item,
+.st-copy-button,
+.st-rules-button,
+.stt-reset,
+.qsw-pill,
+.qsw-small,
+.qsw-test,
+.qsw-chip {
+  transition:
+    transform var(--t-med) var(--ease-spring),
+    background-color var(--t-fast) ease,
+    border-color var(--t-fast) ease,
+    color var(--t-fast) ease,
+    box-shadow var(--t-med) ease,
+    opacity var(--t-fast) ease;
+}
+.wp-item:not(:disabled):hover,
+.qsw-pill:hover,
+.qsw-small:not(:disabled):hover,
+.qsw-test:not(:disabled):hover,
+.stt-reset:hover {
+  transform: translateY(-2px);
+}
+.wp-item:not(:disabled):active,
+.qsw-pill:active,
+.qsw-small:not(:disabled):active,
+.qsw-test:not(:disabled):active,
+.stt-reset:active {
+  transform: scale(0.96);
+}
+.qsw-pill.on {
+  box-shadow: 0 4px 12px #00000022;
+}
+.qsw-chip {
+  animation: pop-in 0.35s var(--ease-spring) both;
+}
+.qsw-x {
+  transition:
+    color var(--t-fast) ease,
+    transform var(--t-fast) var(--ease-spring);
+}
+.qsw-x:hover {
+  transform: scale(1.3);
+}
+.qsw-input,
+.lobby-name-input,
+.st-number,
+.st-invite-input,
+.mp-guess-input {
+  transition:
+    border-color var(--t-fast) ease,
+    box-shadow var(--t-med) ease,
+    background-color var(--t-fast) ease;
+}
+.qsw-input:focus,
+.lobby-name-input:focus,
+.st-number:focus,
+.mp-guess-input:focus {
+  box-shadow: 0 0 0 4px #87e0ff55;
+  outline: none;
+}
+input[type='checkbox'] {
+  transition: transform var(--t-fast) var(--ease-spring);
+  cursor: pointer;
+}
+input[type='checkbox']:not(:disabled):hover {
+  transform: scale(1.15);
+}
+input[type='checkbox']:not(:disabled):active {
+  transform: scale(0.9);
+}
+.st-checkbox-label {
+  cursor: pointer;
+}
+.qs-trigger {
+  transition: transform var(--t-med) var(--ease-spring);
+}
+.qs-trigger:active {
+  transform: scale(0.9);
+}
+
+/* small things that appear */
+.away-icon,
+.snooze-icon,
+.disconnect-icon {
+  animation: pop-in 0.4s var(--ease-spring) both;
+}
+.rating {
+  animation: fade-in 0.4s ease both;
+}
+.sm-score-row {
+  animation: row-in 0.5s var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 70ms + 150ms);
+}
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+}
+.sm-score-delta {
+  animation: pop-in 0.45s var(--ease-spring) both;
+  animation-delay: calc(var(--i, 0) * 70ms + 350ms);
+}
+.sm-scores-title {
+  animation: fade-in 0.5s var(--ease-out) both;
+}
+.stt-card {
+  animation: fade-in 0.55s var(--ease-out) both;
+}
+.stt-card:nth-child(2) {
+  animation-delay: 0.05s;
+}
+.stt-card:nth-child(3) {
+  animation-delay: 0.1s;
+}
+.stt-card:nth-child(4) {
+  animation-delay: 0.15s;
+}
+.stt-card:nth-child(5) {
+  animation-delay: 0.2s;
+}
+.qsw-card {
+  animation: fade-in 0.55s var(--ease-out) both;
+}
+.qsw-card:nth-child(3) {
+  animation-delay: 0.06s;
+}
+.qsw-card:nth-child(4) {
+  animation-delay: 0.12s;
+}
+.qsw-card:nth-child(5) {
+  animation-delay: 0.18s;
+}
+.stt-bar-fill {
+  transition: width 0.9s var(--ease-out);
+}
+.gt-item {
+  transition: transform var(--t-med) var(--ease-out);
+}
+
+/* quick switch: a quick fade, never a wait */
+.qs-cover {
+  transition: opacity 0.12s ease;
+}
+.qs-exit {
+  transition:
+    opacity var(--t-fast) ease,
+    transform var(--t-med) var(--ease-spring);
+}
+.qs-exit:hover {
+  transform: scale(1.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}

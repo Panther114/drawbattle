@@ -110,6 +110,15 @@ open, so it appears instantly. It is shown or hidden with:
 Everything stays on your device: the settings are in localStorage and a chosen file is kept in your browser's IndexedDB.
 Some websites forbid being shown inside another page, so there is a **pop-up window** mode that opens it in its own screen-sized window.
 
+### smooth motion
+
+Everything that changes state is animated with one shared set of curves and timings (see the motion block at the end of
+`src/style.css`): pages and game screens fade and rise into place, the chat grows out of its pill and its messages slide in,
+dialogs scale in and out, switching between random and manual teams cross-fades the lists while players glide into their
+spots, cards and buttons lift on hover, inputs glow on focus, score rows stagger in, and switching themes blends the colours.
+Only opacity and transform are animated, so it stays smooth, and players who ask their system for **reduced motion** get
+none of it.
+
 ### dark mode
 
 Every page has a **dark mode** toggle (top left, or the corner of a game). Light is the default; your choice is remembered.

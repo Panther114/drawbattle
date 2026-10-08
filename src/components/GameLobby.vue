@@ -137,30 +137,35 @@ const startDisabled = computed(
     </form>
 
     <template v-if="isConnected">
-      <div v-if="randomTeams" class="lobby-teams random">
+      <Transition name="lobby-swap" mode="out-in">
+      <div v-if="randomTeams" key="random" class="lobby-teams random">
         <div class="lobby-team">
           <div class="lobby-team-name"><Icon name="shuffle" class="lobby-random-ic" />random teams</div>
           <div class="lobby-team-line" />
-          <div v-for="uid in everyone" :key="uid" class="lobby-user" :class="{ submitted: fishbowlWords !== undefined && fishbowlWords[uid] !== undefined }">
-            <span v-if="uid === userId">{{ cleanName || 'anonymous' }} (you)<sup v-if="users[uid]" class="rating">{{ users[uid].rating }}</sup></span>
-            <Username v-else :user="users[uid]" />
-          </div>
+          <TransitionGroup name="lu" tag="div" class="lobby-users">
+            <div v-for="uid in everyone" :key="uid" class="lobby-user" :class="{ submitted: fishbowlWords !== undefined && fishbowlWords[uid] !== undefined }">
+              <span v-if="uid === userId">{{ cleanName || 'anonymous' }} (you)<sup v-if="users[uid]" class="rating">{{ users[uid].rating }}</sup></span>
+              <Username v-else :user="users[uid]" />
+            </div>
+          </TransitionGroup>
           <div class="lobby-random-note">two teams are drawn when the game starts</div>
         </div>
       </div>
-      <div v-else class="lobby-teams">
+      <div v-else key="manual" class="lobby-teams">
         <div v-for="(team, ti) in teams" :key="team.name" class="lobby-team">
           <div class="lobby-team-name">{{ team.name }}</div>
           <div class="lobby-team-line" />
-          <div
-            v-for="uid in team.userIds"
-            :key="uid"
-            class="lobby-user"
-            :class="{ submitted: fishbowlWords !== undefined && fishbowlWords[uid] !== undefined }"
-          >
-            <span v-if="uid === userId">{{ cleanName || 'anonymous' }} (you)<sup v-if="users[uid]" class="rating">{{ users[uid].rating }}</sup></span>
-            <Username v-else :user="users[uid]" />
-          </div>
+          <TransitionGroup name="lu" tag="div" class="lobby-users">
+            <div
+              v-for="uid in team.userIds"
+              :key="uid"
+              class="lobby-user"
+              :class="{ submitted: fishbowlWords !== undefined && fishbowlWords[uid] !== undefined }"
+            >
+              <span v-if="uid === userId">{{ cleanName || 'anonymous' }} (you)<sup v-if="users[uid]" class="rating">{{ users[uid].rating }}</sup></span>
+              <Username v-else :user="users[uid]" />
+            </div>
+          </TransitionGroup>
           <Btn
             v-if="!(isSpectator || fishbowlWords !== undefined)"
             class="lobby-join-team"
@@ -173,6 +178,7 @@ const startDisabled = computed(
           </Btn>
         </div>
       </div>
+      </Transition>
 
       <FishbowlPopulation
         v-if="fishbowlWords !== undefined"

@@ -146,13 +146,14 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
 
 <template>
   <aside class="gc" :class="{ closed: !open }" aria-label="game chat">
-    <button v-if="!open" type="button" class="gc-pill" @click="setOpen(true)">
+    <Transition name="gc-swap" mode="out-in">
+    <button v-if="!open" key="pill" type="button" class="gc-pill" @click="setOpen(true)">
       <Icon name="chat" class="gc-pill-icon" />
       chat
-      <span v-if="unread > 0" class="gc-badge">{{ unread > 9 ? '9+' : unread }}</span>
+      <span v-if="unread > 0" :key="unread" class="gc-badge">{{ unread > 9 ? '9+' : unread }}</span>
     </button>
 
-    <section v-else class="gc-panel">
+    <section v-else key="panel" class="gc-panel">
       <header class="gc-head">
         <div class="gc-tabs" role="tablist">
           <button type="button" role="tab" :aria-selected="tab === 'chat'" :class="{ on: tab === 'chat' }" @click="setTab('chat')">
@@ -261,5 +262,6 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
         <div class="gp-hint gp-foot">a vote needs more than half of the other active players</div>
       </div>
     </section>
+    </Transition>
   </aside>
 </template>

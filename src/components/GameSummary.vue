@@ -183,7 +183,7 @@ const why = (r) => {
       <div v-if="stage >= Stage.Winner && scoreRows.length" class="sm-scores">
         <div class="sm-scores-title"><Icon name="trophy" class="sm-scores-ic" />score changes</div>
         <div class="sm-scores-note">every match shares out +100 points between the players, so a gain for one is a loss for another</div>
-        <div v-for="r in scoreRows" :key="r.id" class="sm-score-row" :class="{ me: r.id === userId }">
+        <div v-for="(r, idx) in scoreRows" :key="r.id" class="sm-score-row" :class="{ me: r.id === userId }" :style="{ '--i': idx }">
           <span class="sm-score-dot" :class="'t' + r.team" />
           <span class="sm-score-name">{{ r.name }}<em v-if="r.id === userId"> (you)</em></span>
           <span class="sm-score-why">{{ why(r) }}</span>

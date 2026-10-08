@@ -18,7 +18,13 @@ export function applyTheme() {
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme.dark ? '#14161f' : '#fffad4');
 }
 
+let fadeTimer;
 export function toggleTheme() {
+  // colours glide to the other theme instead of snapping
+  const root = document.documentElement;
+  root.classList.add('theme-fade');
+  clearTimeout(fadeTimer);
+  fadeTimer = setTimeout(() => root.classList.remove('theme-fade'), 450);
   theme.choice = theme.dark ? 'light' : 'dark';
   storage?.setItem(KEY, theme.choice);
   applyTheme();

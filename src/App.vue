@@ -9,7 +9,9 @@ onMounted(() => setArmed(true));
 
 <template>
   <router-view v-slot="{ Component, route }">
-    <component :is="Component" :key="route.params.gameId ? String(route.params.gameId).toLowerCase() : route.path" />
+    <Transition name="page" mode="out-in" appear>
+      <component :is="Component" :key="route.params.gameId ? String(route.params.gameId).toLowerCase() : route.path" />
+    </Transition>
   </router-view>
   <QuickSwitchOverlay />
 </template>
