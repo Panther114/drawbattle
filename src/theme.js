@@ -1,5 +1,5 @@
 // Light / dark theme. Light by default; the player's choice lives in localStorage.
-import { reactive } from 'vue';
+import { nextTick, reactive } from 'vue';
 import { safeStorage } from './storage.js';
 
 const KEY = 'theme';
@@ -19,15 +19,28 @@ export function applyTheme() {
 }
 
 let fadeTimer;
+function change() {
+  theme.choice = theme.dark ? 'light' : 'dark';
+  storage?.setItem(KEY, theme.choice);
+  applyTheme();
+}
 export function toggleTheme() {
-  // colours glide to the other theme instead of snapping
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  if (!reduced && document.startViewTransition) {
+    // the browser blends a snapshot of the old page into the new one on the GPU: smooth even on slow devices
+    document.startViewTransition(async () => {
+      change();
+      await nextTick();
+    });
+    return;
+  }
+  if (reduced) return change();
+  // older browsers: let the colours glide
   const root = document.documentElement;
   root.classList.add('theme-fade');
   clearTimeout(fadeTimer);
   fadeTimer = setTimeout(() => root.classList.remove('theme-fade'), 450);
-  theme.choice = theme.dark ? 'light' : 'dark';
-  storage?.setItem(KEY, theme.choice);
-  applyTheme();
+  change();
 }
 
 export function initTheme() {

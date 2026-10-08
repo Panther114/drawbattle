@@ -31,9 +31,8 @@ chill, chaos). All rules are stored in the game's settings, so they apply to eve
 | drawing | colour palette (full / basic / greys), allow eraser, allow clear |
 | guessing | 2-4 words to choose from, letter hints every N seconds, forgive one typo, single-word answers only, longest word allowed |
 | players | max team size, allow spectators, allow joining after the start |
-| game | play the final drawdown (turn it off and the game simply ends after the last round) |
 
-Every number rule (and the round count and round length in the lobby) takes a typed whole number, clamped to a sane range
+The lobby settings next to it hold the round count, round length, *show word lengths*, *play the final drawdown* (turn it off and the game simply ends after the last round), *random teams* and streamer mode. Every number rule (and the round count and round length) takes a typed whole number, clamped to a sane range
 (rounds 1-200, round length 5-600 s).
 
 ### in-game chat, vote kick and team switching
@@ -42,8 +41,7 @@ Every number rule (and the round count and round length in the lobby) takes a ty
   Spectators can read along. Messages are rate limited, and a message that contains the word currently being drawn is
   blocked so nobody can spoil a round.
 * **vote kick** – open the *players* tab and press *votekick* next to someone. A kick needs **more than half of the other
-  active players** (7 players: 6 can vote, 4 votes kick). It needs at least 3 active players and never removes a team's only
-  player. If the kicked player was drawing (or choosing the word) the next active teammate takes over and the canvas is
+  active players** (7 players: 6 can vote, 4 votes kick). It needs at least 3 active players and a team always keeps at least 2 players. If the kicked player was drawing (or choosing the word) the next active teammate takes over and the canvas is
   cleared. A kicked player cannot rejoin that game.
 * **forced start** – when someone forces the next round, a planned drawer who never pressed *continue* is skipped in favour
   of the next active teammate.
@@ -153,8 +151,8 @@ Everything is served by one Node process: the client, the REST API under `/api` 
 ## how a game works
 
 * **lobby** – players join with a name and are placed on the smaller team (max 8 per team). Anyone can switch team, rename,
-  change the settings (rounds, seconds per round, word pack, show word lengths, streamer mode) and press *start game!*
-  once both teams have 2+ players. A 5 second countdown (cancellable) starts round 0.
+  change the settings (rounds, seconds per round, word pack, show word lengths, final drawdown, random teams, streamer mode) and press *start game!*
+  once both teams have 2+ players (4+ players in total with random teams). A 5 second countdown (cancellable) starts round 0.
 * **a round** – one drawer per team; the *chooser* picks one of two words (15s, otherwise the first is used), then a 3s
   countdown, then both teams draw/guess the same word. The first team to guess wins the round (200 pts, the other team
   gets 100 if it also guesses). The round ends when both guessed or the time runs out, followed by a 5s end screen and
@@ -173,6 +171,9 @@ server/wordpacks.js    word packs (+ txt files)
 src/                   Vue client (views, components, shared rules in shared.js)
 src/rating.js          player score maths and its local history
 src/quickswitch.js     quick switch settings, hotkeys and the stored file
+src/components/PdfCover.vue  draws the quick switch PDF in the page (pdf.js)
+src/presence.js        away / snooze state sent to teammates
+public/quick-switch-default.pdf  the default quick switch page
 scripts/               asset generators (icons, sounds)
 ```
 
@@ -195,7 +196,7 @@ scripts/               asset generators (icons, sounds)
 
 Footprint: ~55 MB RAM idle (node heap capped at 160 MB), no timers beyond a 30 second cleanup / heartbeat tick, so an idle
 server uses ~0 CPU. Optional env vars: `MAX_GAMES` (default 300), `MAX_SOCKETS` (default 1500). Games are kept in memory only. Dead games are reaped
-automatically: any game with no activity for 10 minutes, a lobby nobody is connected to after 2 minutes, and a started game
+automatically: a game whose players are connected but silent for 30 minutes, a lobby nobody is connected to after 2 minutes, and a started game
 whose players all dropped after 10 minutes. Every socket is pinged every 30 s, so a device that vanished (battery died, no
 signal) is dropped within a minute. Tip: in Settings you can also set a memory limit (e.g. 256 MB) and enable
 **Serverless** (app sleeping) if you want it to cost nothing while nobody plays — clients simply reconnect on wake.

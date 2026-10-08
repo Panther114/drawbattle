@@ -5416,9 +5416,9 @@ input[type='checkbox']:not(:disabled):active {
   transition: transform var(--t-med) var(--ease-out);
 }
 
-/* quick switch: a quick fade, never a wait */
+/* quick switch is instant: no fade, no delay */
 .qs-cover {
-  transition: opacity 0.12s ease;
+  transition: none;
 }
 .qs-exit {
   transition:
@@ -5440,4 +5440,11 @@ input[type='checkbox']:not(:disabled):active {
     transition-delay: 0ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* theme switch: one smooth cross-fade of the whole page */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.4s;
+  animation-timing-function: var(--ease-out);
 }
