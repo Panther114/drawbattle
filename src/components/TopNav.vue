@@ -1,6 +1,13 @@
+<script setup>
+import Icon from './Icon.vue';
+import ThemeToggle from './ThemeToggle.vue';
+</script>
+
 <template>
   <nav class="top-nav">
     <slot />
-    <a href="https://github.com/Panther114/drawbattle" target="_blank" rel="noreferrer">github</a>
+    <router-link v-if="$route.name !== 'Stats'" to="/stats" class="nav-stats"><Icon name="chart" />my stats</router-link>
+    <a href="https://github.com/Panther114/drawbattle" target="_blank" rel="noreferrer" class="nav-github"><Icon name="code" />github</a>
+    <ThemeToggle label />
   </nav>
 </template>

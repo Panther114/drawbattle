@@ -19,6 +19,12 @@ export const S = {
   CancelStartGame: 17,
   CanvasOperation: 18,
   UpdateFishbowlWords: 19,
+  Chat: 20,
+  KickVotes: 21,
+  UserKicked: 22,
+  DrawerRotated: 23,
+  SwitchAppeals: 24,
+  GameOver: 25,
   ServerError: 300,
   ForceRefresh: 301,
 };
@@ -36,9 +42,13 @@ export const C = {
   CanvasOperation: 109,
   SubmitFishbowlWords: 110,
   ForceStartNextRound: 111,
+  Chat: 112,
+  VoteKick: 113,
+  SwitchAppeal: 114,
+  SwitchVote: 115,
 };
 
-export const Status = { Connected: 1, Disconnected: 2 };
+export const Status = { Connected: 1, Disconnected: 2, Kicked: 3 };
 
 // timing constants (seconds) shared with the client
 export const DEFAULT_RULES = {
@@ -57,6 +67,7 @@ export const DEFAULT_RULES = {
   allowLateJoin: true,
   singleWordsOnly: false,
   maxWordLength: 0,
+  finalDrawdown: true,
 };
 // clamp numeric rules to sane ranges so a bad client cannot wedge a game
 const RULE_RANGES = {
@@ -83,6 +94,40 @@ export const HEAD_START_BASE_SEC = 3;
 export const HEAD_START_STEP_SEC = 1;
 export const MAX_TEAM_SIZE = 8;
 export const MAX_GUESS_LENGTH = 36;
+export const MAX_NAME_LENGTH = 16;
+export const MAX_CHAT_LENGTH = 140;
+const CHAT_HISTORY = 80;
+const CHAT_BURST = 5; // messages allowed per CHAT_WINDOW_MS per player
+const CHAT_WINDOW_MS = 8000;
+const MIN_VOTE_PLAYERS = 3; // a vote kick needs at least this many active players
+
+// strictly more than half
+export const voteThreshold = (voters) => Math.floor(voters / 2) + 1;
+
+// usernames: no control / invisible characters, no "(you)" look-alikes, capped length
+const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
+const YOU_TAG = /\(\s*y\s*o\s*u\s*\)/gi;
+export function sanitizeName(raw) {
+  if (typeof raw !== 'string') return '';
+  let n = raw.normalize('NFKC').replace(INVISIBLE, '');
+  for (let prev = ''; prev !== n; ) {
+    prev = n;
+    n = n.replace(YOU_TAG, '');
+  }
+  return Array.from(n.replace(/\s+/g, ' ').trim()).slice(0, MAX_NAME_LENGTH).join('').trim();
+}
+
+// ---- game lifetime ----
+export const IDLE_MS = 10 * 60 * 1000; // no activity at all (messages, drawing, chat) for this long: the game is deleted
+export const EMPTY_MS = 2 * 60 * 1000; // an unstarted game nobody is connected to is deleted after this long
+export const LIVE_IDLE_MS = 30 * 60 * 1000; // players are still connected (heartbeat-checked) but nothing happens at all
+
+// a started game whose players all dropped keeps its seats for IDLE_MS so they can come back
+export function isStale(g, now) {
+  const idle = now - g.lastActivity;
+  if (g.activeCount > 0) return idle > LIVE_IDLE_MS;
+  return idle > (g.started ? IDLE_MS : EMPTY_MS);
+}
 
 const ID_CHARS = 'abcdefghijklmnopqrstuvwxyz';
 
@@ -159,6 +204,10 @@ function shuffle(arr) {
   return a;
 }
 
+const Op = { ChangeColor: 204, ClearCanvas: 205, ChangeTool: 206, ChangeStrokeWidth: 207 };
+
+const mapOfSets = (m) => Object.fromEntries([...m].map(([k, set]) => [k, [...set]]));
+
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
 export class Game {
@@ -189,7 +238,14 @@ export class Game {
     this.createdAt = Date.now();
     this.lastActivity = Date.now();
     this.finished = false;
+    this.ended = false; // true once the game is over without a final drawdown
     this.endedAt = undefined;
+    this.chat = [];
+    this.chatSeq = 0;
+    this.chatLog = new Map(); // userId -> recent send times (rate limit)
+    this.banned = new Set(); // vote-kicked user ids
+    this.kickVotes = new Map(); // targetId -> Set<voterId>
+    this.switchAppeals = new Map(); // appellantId -> Set<voterId>
     this.chooserTimer = undefined;
     this.chosenByTeam = -1;
     this.availableWords = [];
@@ -215,7 +271,7 @@ export class Game {
     this.lastActivity = Date.now();
   }
   get started() {
-    return this.currentRound !== undefined || this.finalRound !== undefined;
+    return this.currentRound !== undefined || this.finalRound !== undefined || this.ended;
   }
   get inCountdown() {
     return (
@@ -229,8 +285,16 @@ export class Game {
     for (const set of this.sockets.values()) n += set.size;
     return n;
   }
+  // players currently on a team (vote-kicked players keep a user record for the recap but are on no team)
   get userCount() {
-    return Object.keys(this.users).length;
+    return this.teams.reduce((n, t) => n + t.userIds.length, 0);
+  }
+  // players on a team with a live connection; spectators do not count
+  activePlayers() {
+    return this.teams.flatMap((t) => t.userIds).filter((id) => this.users[id] && this.users[id].status === Status.Connected);
+  }
+  get activeCount() {
+    return this.activePlayers().length;
   }
   teamIndexOf(userId) {
     return this.teams.findIndex((t) => t.userIds.includes(userId));
@@ -242,7 +306,7 @@ export class Game {
 
   // ---------- snapshots ----------
   // includeCanvas: 'none' | 'current' | 'all'
-  snapshot(includeCanvas = 'current') {
+  snapshot(includeCanvas = 'current', withChat = false) {
     const stripRound = (round, keepCanvas) => {
       const r = { ...round };
       r.teamStates = round.teamStates.map((ts) => {
@@ -258,7 +322,12 @@ export class Game {
       users: this.users,
       previousRounds: this.previousRounds.map((r) => stripRound(r, includeCanvas === 'all')),
       settings: this.settings,
+      createdAt: this.createdAt,
+      kickVotes: mapOfSets(this.kickVotes),
+      switchAppeals: mapOfSets(this.switchAppeals),
     };
+    if (this.ended) out.ended = true;
+    if (withChat) out.chat = this.chat;
     if (this.currentRound) out.currentRound = stripRound(this.currentRound, includeCanvas !== 'none');
     if (this.finalRound) {
       out.finalRound = {
@@ -332,10 +401,16 @@ export class Game {
     }
     if (spectate) {
       this.spectators.add(ws);
-      this.send(ws, [S.SessionStart, this.snapshot('current'), this.now()]);
+      this.send(ws, [S.SessionStart, this.snapshot('current', true), this.now()]);
       if (this.started) this.send(ws, [S.ReadyUp, this.previousRounds.length, [...this.ready]]);
       return;
     }
+    if (this.banned.has(userId)) {
+      this.send(ws, [S.ServerError, { type: 'Kicked', gameId: this.id }]);
+      ws.close(1000);
+      return;
+    }
+    if (userName !== undefined) userName = sanitizeName(userName);
     const existing = this.users[userId];
     if (this.lobbyTimers.has(userId)) {
       clearTimeout(this.lobbyTimers.get(userId));
@@ -346,9 +421,10 @@ export class Game {
       const wasDisconnected = existing.status === Status.Disconnected;
       existing.status = Status.Connected;
       this.addSocket(userId, ws);
-      this.send(ws, [S.SessionStart, this.snapshot('current'), this.now()]);
+      this.send(ws, [S.SessionStart, this.snapshot('current', true), this.now()]);
       if (this.started) this.send(ws, [S.ReadyUp, this.previousRounds.length, [...this.ready]]);
       if (wasDisconnected || this.started) this.broadcast([S.UserReconnect, userId], ws);
+      if (wasDisconnected) this.recheckVotes();
       return;
     }
     if (this.started && !this.rule('allowLateJoin')) {
@@ -369,8 +445,9 @@ export class Game {
     this.teams[ti].userIds.push(userId);
     this.addSocket(userId, ws);
     this.broadcast([S.JoinGame, user, this.teams], ws);
-    this.send(ws, [S.SessionStart, this.snapshot('current'), this.now()]);
+    this.send(ws, [S.SessionStart, this.snapshot('current', true), this.now()]);
     if (this.started) this.send(ws, [S.ReadyUp, this.previousRounds.length, [...this.ready]]);
+    this.recheckVotes();
   }
 
   addSocket(userId, ws) {
@@ -397,12 +474,13 @@ export class Game {
       this.sockets.delete(ctx.userId);
     }
     const user = this.users[ctx.userId];
-    if (!user) return;
+    if (!user || user.status === Status.Kicked) return;
     if (!this.started) {
       this.removeFromLobby(ctx.userId);
     } else {
       user.status = Status.Disconnected;
       this.broadcast([S.UserDisconnect, ctx.userId]);
+      this.recheckVotes();
       this.maybeAdvance();
     }
   }
@@ -411,6 +489,8 @@ export class Game {
     delete this.users[userId];
     for (const t of this.teams) t.userIds = t.userIds.filter((u) => u !== userId);
     this.broadcast([S.UserLobbyDisconnect, userId, this.teams]);
+    this.dropVotesOf(userId);
+    this.recheckVotes();
   }
 
   // ---------- message handling ----------
@@ -426,7 +506,7 @@ export class Game {
     const ctx = ws.gameCtx;
     if (!ctx || ctx.spectate) return;
     const userId = ctx.userId;
-    if (!this.users[userId]) return;
+    if (!this.users[userId] || this.users[userId].status === Status.Kicked) return;
     switch (msg[0]) {
       case C.UserGuess:
         return this.onGuess(userId, msg[1], msg[2]);
@@ -448,6 +528,14 @@ export class Game {
         return this.onCanvasOperation(ws, userId, msg[1], msg[2]);
       case C.ForceStartNextRound:
         return this.onForceStart(userId, msg[1]);
+      case C.Chat:
+        return this.onChat(ws, userId, msg[1]);
+      case C.VoteKick:
+        return this.onVoteKick(userId, msg[1]);
+      case C.SwitchAppeal:
+        return this.onSwitchAppeal(userId);
+      case C.SwitchVote:
+        return this.onSwitchVote(userId, msg[1]);
       default:
         return;
     }
@@ -467,8 +555,250 @@ export class Game {
   onUpdateName(userId, name) {
     if (typeof name !== 'string') return;
     const user = this.users[userId];
-    user.name = name;
+    user.name = sanitizeName(name);
     this.broadcast([S.UpdateUser, user]);
+  }
+
+  // ---------- chat ----------
+  addChat(msg) {
+    const m = { id: ++this.chatSeq, ts: Date.now(), ...msg };
+    this.chat.push(m);
+    if (this.chat.length > CHAT_HISTORY) this.chat.splice(0, this.chat.length - CHAT_HISTORY);
+    this.broadcast([S.Chat, m]);
+  }
+  systemChat(text) {
+    this.addChat({ sys: true, text });
+  }
+  // a notice only the sender sees (not stored)
+  chatNotice(ws, text) {
+    this.send(ws, [S.Chat, { id: `n${++this.chatSeq}`, ts: Date.now(), sys: true, text }]);
+  }
+
+  // words that are live right now: sharing them in chat would spoil the round
+  liveWords() {
+    const words = [];
+    const r = this.currentRound;
+    if (r && r.word !== undefined && !this.inScoreScreen()) words.push(r.word);
+    const fr = this.finalRound;
+    if (fr && !this.finished) for (const states of fr.teamStates) words.push(fr.words[states.length - 1]);
+    return words;
+  }
+  chatSpoils(text) {
+    const flat = normalizeGuess(text);
+    const tokens = text.split(/\s+/).map(normalizeGuess);
+    return this.liveWords().some((w) => {
+      const nw = normalizeGuess(w);
+      if (!nw) return false;
+      return tokens.includes(nw) || (nw.length >= 4 && flat.includes(nw));
+    });
+  }
+
+  onChat(ws, userId, text) {
+    if (typeof text !== 'string') return;
+    const body = Array.from(text.replace(INVISIBLE, ' ').replace(/\s+/g, ' ').trim())
+      .slice(0, MAX_CHAT_LENGTH)
+      .join('');
+    if (!body) return;
+    const now = Date.now();
+    const recent = (this.chatLog.get(userId) || []).filter((t) => now - t < CHAT_WINDOW_MS);
+    this.chatLog.set(userId, recent);
+    if (recent.length >= CHAT_BURST) return this.chatNotice(ws, 'slow down a little!');
+    if (this.chatSpoils(body)) return this.chatNotice(ws, "don't give away the word!");
+    recent.push(now);
+    const user = this.users[userId];
+    this.addChat({ userId, name: user.name, team: this.teamIndexOf(userId), text: body });
+  }
+
+  // ---------- voting (vote kick, team switch appeals) ----------
+  // players who may vote: connected players on a team, minus the one being voted about
+  votersFor(excludeId) {
+    return this.activePlayers().filter((id) => id !== excludeId);
+  }
+  broadcastVotes() {
+    this.broadcast([S.KickVotes, mapOfSets(this.kickVotes)]);
+    this.broadcast([S.SwitchAppeals, mapOfSets(this.switchAppeals)]);
+  }
+  dropVotesOf(userId) {
+    this.kickVotes.delete(userId);
+    this.switchAppeals.delete(userId);
+    for (const [k, set] of this.kickVotes) {
+      set.delete(userId);
+      if (set.size === 0) this.kickVotes.delete(k);
+    }
+    for (const set of this.switchAppeals.values()) set.delete(userId);
+  }
+  clearAppeals() {
+    if (this.switchAppeals.size === 0) return;
+    this.switchAppeals.clear();
+    this.broadcastVotes();
+  }
+
+  onVoteKick(userId, targetId) {
+    if (this.finished || typeof targetId !== 'string' || targetId === userId) return;
+    const target = this.users[targetId];
+    const ti = this.teamIndexOf(targetId);
+    if (!target || ti < 0) return;
+    if (this.teamIndexOf(userId) < 0 || this.users[userId].status !== Status.Connected) return;
+    if (this.teams[ti].userIds.length < 3) return; // a team must keep at least 2 players
+    if (this.activeCount < MIN_VOTE_PLAYERS) return;
+    let votes = this.kickVotes.get(targetId);
+    if (!votes) this.kickVotes.set(targetId, (votes = new Set()));
+    if (votes.has(userId)) votes.delete(userId);
+    else votes.add(userId);
+    if (votes.size === 0) this.kickVotes.delete(targetId);
+    this.broadcastVotes();
+    this.recheckVotes(true);
+  }
+
+  // more than half of the other active players must agree
+  votePasses(votes, voters) {
+    return voters.length >= 2 && voters.filter((v) => votes.has(v)).length >= voteThreshold(voters.length);
+  }
+
+  // called whenever the pool of voters or the teams change; carries out any vote that now passes
+  // fromVote: a vote was just cast, so passing votes are carried out. Plain connection changes only clean up:
+  // a flaky connection must never tip an old partial vote over the threshold.
+  recheckVotes(fromVote = false) {
+    if (this.rechecking || this.finished) return;
+    this.rechecking = true;
+    let changed = false;
+    try {
+      for (let guard = 0; guard < 50; guard++) {
+        const kick = !fromVote ? undefined : [...this.kickVotes].find(([id, votes]) => {
+          if (!this.users[id] || this.teamIndexOf(id) < 0) return false;
+          return this.votePasses(votes, this.votersFor(id));
+        });
+        if (kick) {
+          this.kick(kick[0]);
+          continue;
+        }
+        const appeal = !fromVote ? undefined : [...this.switchAppeals].find(([id, votes]) => {
+          if (!this.canSwitch(id)) return false;
+          return this.votePasses(votes, this.votersFor(id));
+        });
+        if (appeal) {
+          this.switchTeam(appeal[0]);
+          continue;
+        }
+        // appeals that can no longer succeed (team shrank, voters left) are withdrawn
+        for (const id of [...this.switchAppeals.keys()]) {
+          if (!this.canSwitch(id)) {
+            this.switchAppeals.delete(id);
+            changed = true;
+          }
+        }
+        break;
+      }
+    } finally {
+      this.rechecking = false;
+    }
+    if (changed) this.broadcastVotes();
+  }
+
+  kick(targetId) {
+    const user = this.users[targetId];
+    const ti = this.teamIndexOf(targetId);
+    this.banned.add(targetId);
+    this.rotateDrawerOf(targetId, ti);
+    this.teams[ti].userIds = this.teams[ti].userIds.filter((id) => id !== targetId);
+    this.ready.delete(targetId);
+    this.dropVotesOf(targetId);
+    // before the game starts a kicked player is simply gone; later they stay on record for the recap
+    const inLobby = !this.started || this.inCountdown;
+    if (inLobby) delete this.users[targetId];
+    else user.status = Status.Kicked;
+    const socks = this.sockets.get(targetId);
+    this.sockets.delete(targetId);
+    if (socks) {
+      for (const ws of socks) {
+        this.send(ws, [S.ServerError, { type: 'Kicked', gameId: this.id }]);
+        ws.close(1000);
+      }
+    }
+    this.broadcast([S.UserKicked, targetId, this.teams, inLobby]);
+    this.broadcastVotes();
+    this.systemChat(`${user.name || 'anonymous'} was vote-kicked`);
+    this.maybeAdvance();
+  }
+
+  // hand the pen to a teammate when the current drawer is about to leave the game
+  rotateDrawerOf(targetId, ti) {
+    const ids = this.teams[ti].userIds;
+    const replacement = () => {
+      const id = this.nextDrawer(ti, targetId);
+      return id !== targetId ? id : ids.find((u) => u !== targetId);
+    };
+    const wipe = (ref, state) => {
+      for (const op of [[Op.ClearCanvas], [Op.ChangeTool, 'pencil'], [Op.ChangeColor, '000000'], [Op.ChangeStrokeWidth, 1]]) {
+        state.canvasOperations.push(op);
+        this.broadcast([S.CanvasOperation, ref, ti, op]);
+      }
+    };
+    const round = this.currentRound;
+    if (round && round.teamStates[ti].drawerId === targetId && !this.inScoreScreen()) {
+      const state = round.teamStates[ti];
+      state.drawerId = replacement();
+      if (round.chooserId === targetId) round.chooserId = state.drawerId;
+      const ref = this.previousRounds.length;
+      wipe(ref, state);
+      this.broadcast([S.DrawerRotated, ref, ti, state.drawerId, round.chooserId]);
+    }
+    const fr = this.finalRound;
+    if (fr && !this.finished) {
+      const states = fr.teamStates[ti];
+      const idx = states.length - 1;
+      if (states[idx].drawerId === targetId) {
+        states[idx].drawerId = replacement();
+        wipe([idx], states[idx]);
+        this.broadcast([S.DrawerRotated, [idx], ti, states[idx].drawerId]);
+      }
+    }
+  }
+
+  // ---------- team switch appeals (between rounds only) ----------
+  betweenRounds() {
+    const r = this.currentRound;
+    return !this.finished && !this.ended && !!r && r.word !== undefined && this.inScoreScreen();
+  }
+  teamActiveCount(ti) {
+    return this.teams[ti].userIds.filter((id) => this.users[id] && this.users[id].status === Status.Connected).length;
+  }
+  // a player may appeal when their team keeps at least 2 active players without them
+  canSwitch(userId) {
+    const ti = this.teamIndexOf(userId);
+    if (ti < 0 || !this.users[userId] || this.users[userId].status !== Status.Connected) return false;
+    if (this.teamActiveCount(ti) <= 2) return false;
+    if (this.teams[1 - ti].userIds.length >= this.rule('maxTeamSize')) return false;
+    return this.votersFor(userId).length >= 2;
+  }
+  onSwitchAppeal(userId) {
+    if (!this.betweenRounds()) return;
+    if (this.switchAppeals.has(userId)) {
+      this.switchAppeals.delete(userId);
+      return this.broadcastVotes();
+    }
+    if (!this.canSwitch(userId)) return;
+    this.switchAppeals.set(userId, new Set());
+    this.broadcastVotes();
+    this.systemChat(`${this.users[userId].name || 'anonymous'} asked to switch teams`);
+  }
+  onSwitchVote(userId, appellantId) {
+    if (!this.betweenRounds() || typeof appellantId !== 'string' || appellantId === userId) return;
+    const votes = this.switchAppeals.get(appellantId);
+    if (!votes || this.teamIndexOf(userId) < 0 || this.users[userId].status !== Status.Connected) return;
+    if (votes.has(userId)) votes.delete(userId);
+    else votes.add(userId);
+    this.broadcastVotes();
+    this.recheckVotes(true);
+  }
+  switchTeam(userId) {
+    const ti = this.teamIndexOf(userId);
+    this.teams[ti].userIds = this.teams[ti].userIds.filter((id) => id !== userId);
+    this.teams[1 - ti].userIds.push(userId);
+    this.switchAppeals.delete(userId);
+    this.broadcast([S.UpdateTeams, this.teams]);
+    this.broadcastVotes();
+    this.systemChat(`${this.users[userId].name || 'anonymous'} switched to ${this.teams[1 - ti].name}`);
   }
 
   onUpdateSettings(userId, settings) {
@@ -694,13 +1024,16 @@ export class Game {
     if (!this.currentRound || roundIndex !== this.previousRounds.length) return;
     // only valid once the round is over (the score screen is showing)
     if (this.currentRound.wordChosenTime === undefined || this.now() < this.scoreScreenTime(this.currentRound) - 1500) return;
-    this.advance();
+    this.ready.add(userId); // whoever forces the start is obviously present
+    this.advance(true);
   }
 
   nextDrawer(teamIndex, current) {
     const team = this.teams[teamIndex];
     const n = team.userIds.indexOf(current);
-    for (let s = 1; s < team.userIds.length; s++) {
+    // a drawer who left the team (kicked / switched) is not in the list, so every member is a candidate
+    const tries = n < 0 ? team.userIds.length : team.userIds.length - 1;
+    for (let s = 1; s <= tries; s++) {
       const id = team.userIds[(n + s) % team.userIds.length];
       if (this.users[id] && this.users[id].status !== Status.Disconnected) return id;
     }
@@ -712,9 +1045,26 @@ export class Game {
     const winner = roundWinner(lastRound, this.fz);
     return lastRound.teamStates.map((ts, i) => {
       const d = ts.drawerId;
-      if (i === winner && !this.rule('alwaysRotate') && this.users[d] && this.users[d].status !== Status.Disconnected) return d;
-      return this.nextDrawer(i, d);
+      const stays =
+        i === winner &&
+        !this.rule('alwaysRotate') &&
+        this.teams[i].userIds.includes(d) &&
+        this.users[d] &&
+        this.users[d].status !== Status.Disconnected;
+      return stays ? d : this.nextDrawer(i, d);
     });
+  }
+
+  // a forced start must not hand the pen to someone who never readied up: the planned drawer
+  // (or the next teammate in line) who is connected and ready takes over
+  activeDrawer(teamIndex, planned) {
+    const ids = this.teams[teamIndex].userIds;
+    const n = Math.max(0, ids.indexOf(planned));
+    for (let s = 0; s < ids.length; s++) {
+      const id = ids[(n + s) % ids.length];
+      if (this.users[id] && this.users[id].status === Status.Connected && this.ready.has(id)) return id;
+    }
+    return planned;
   }
 
   streakFor(rounds, drawers) {
@@ -733,14 +1083,18 @@ export class Game {
     return s;
   }
 
-  advance() {
+  advance(forced = false) {
     const last = this.currentRound;
     if (!last) return;
     this.clearChooserTimer();
+    this.clearAppeals();
     const rounds = [...this.previousRounds, last];
     const index = rounds.length;
-    const drawers = this.computeNextDrawers(last);
-    if (index >= this.settings.numRounds) return this.startFinalRound(rounds, drawers);
+    let drawers = this.computeNextDrawers(last);
+    if (forced) drawers = drawers.map((d, i) => this.activeDrawer(i, d));
+    if (index >= this.settings.numRounds) {
+      return this.rule('finalDrawdown') ? this.startFinalRound(rounds, drawers) : this.endWithoutFinal(rounds);
+    }
     const winner = roundWinner(last, this.fz);
     const streak = this.streakFor(rounds, drawers);
     const hsBase = this.rule('headStartBase');
@@ -766,6 +1120,16 @@ export class Game {
     this.currentRound = undefined;
     this.ready = new Set();
     this.broadcast([S.StartFinalRound, fr]);
+  }
+
+  // the last round was the end of the game: no final drawdown
+  endWithoutFinal(rounds) {
+    this.previousRounds[rounds.length - 1] = this.currentRound;
+    this.currentRound = undefined;
+    this.ended = true;
+    this.ready = new Set();
+    this.broadcast([S.GameOver]);
+    this.finishGame();
   }
 
   onFinalWordGuessed(teamIndex, idx, ts) {

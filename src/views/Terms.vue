@@ -1,4 +1,5 @@
 <script setup>
+import Icon from '../components/Icon.vue';
 import TopNav from '../components/TopNav.vue';
 const terms = [
   [
@@ -68,7 +69,7 @@ const privacy = [
 
 <template>
   <div class="tos-root">
-    <TopNav><router-link to="/">back to home</router-link></TopNav>
+    <TopNav><router-link to="/" class="nav-home"><Icon name="home" />back to home</router-link></TopNav>
     <div>
       <h2 class="tos-header">Terms of Service</h2>
       <div v-for="(s, i) in terms" :key="i">

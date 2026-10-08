@@ -14,6 +14,8 @@ network protocol, timings and rules were recorded by playing real games against 
 | ![score](docs/screenshots/07-score.png) **score screen** | ![final drawdown](docs/screenshots/08-final-drawdown.png) **the final drawdown** |
 | ![summary](docs/screenshots/09-summary.png) **summary & recap** | ![rules](docs/screenshots/10-customize-rules.png) **customize rules** |
 | ![word pack editor](docs/screenshots/11-word-pack-creator.png) **word pack editor** | ![letter hints](docs/screenshots/12-letter-hints.png) **letter hints (custom rule)** |
+| ![dark mode](docs/screenshots/13-dark-mode.png) **dark mode** | ![chat and votes](docs/screenshots/14-chat-and-votes.png) **chat, vote kick and team switch requests** |
+| ![stats](docs/screenshots/15-stats.png) **my stats (local dashboard)** | ![mobile](docs/screenshots/16-mobile-home.png) ![mobile stats](docs/screenshots/17-mobile-stats.png) **made for phones too** |
 
 ## customization (not in the original)
 
@@ -27,9 +29,36 @@ chill, chaos). All rules are stored in the game's settings, so they apply to eve
 | drawing | colour palette (full / basic / greys), allow eraser, allow clear |
 | guessing | 2-4 words to choose from, letter hints every N seconds, forgive one typo, single-word answers only, longest word allowed |
 | players | max team size, allow spectators, allow joining after the start |
+| game | play the final drawdown (turn it off and the game simply ends after the last round) |
 
 Every number rule (and the round count and round length in the lobby) takes a typed whole number, clamped to a sane range
 (rounds 1-200, round length 5-600 s).
+
+### in-game chat, vote kick and team switching
+
+* **chat** – a compact panel at the bottom right of every game (lobby, rounds, final). Everyone, including both teams, sees it.
+  Spectators can read along. Messages are rate limited, and a message that contains the word currently being drawn is
+  blocked so nobody can spoil a round.
+* **vote kick** – open the *players* tab and press *votekick* next to someone. A kick needs **more than half of the other
+  active players** (7 players: 6 can vote, 4 votes kick). It needs at least 3 active players and never removes a team's only
+  player. If the kicked player was drawing (or choosing the word) the next active teammate takes over and the canvas is
+  cleared. A kicked player cannot rejoin that game.
+* **forced start** – when someone forces the next round, a planned drawer who never pressed *continue* is skipped in favour
+  of the next active teammate.
+* **switch teams** – between rounds, a player on a team with **more than 2 active players** can ask to switch. It passes
+  when more than half of the other active players agree. Requests are dropped when the next round starts.
+* **usernames** – up to 16 characters; `(you)` can never be part of a name (the lobby adds its own tag to your own entry).
+
+### my stats
+
+The **my stats** page (`/stats`) is a dashboard that lives entirely in your browser (localStorage): games played, games won and
+win rate, and your win rate as a drawer and as a guesser (rounds only; the final drawdown is not counted), plus your recent
+games. Nothing is sent to the server, and you can reset it at any time.
+
+### dark mode
+
+Every page has a **dark mode** toggle (top left, or the corner of a game). It follows your system setting until you pick one,
+and remembers your choice. The drawing canvas always stays white.
 
 ### game codes and lobbies
 
@@ -98,7 +127,9 @@ scripts/               asset generators (icons, sounds)
    automatically; no variables are required (Railway provides `PORT`).
 3. In the service's **Settings → Networking** click **Generate Domain** and share the link.
 
-Footprint: ~55 MB RAM idle (node heap capped at 160 MB), no timers beyond a 5 minute cleanup tick, so an idle server uses
-~0 CPU. Optional env vars: `MAX_GAMES` (default 300), `MAX_SOCKETS` (default 1500). Games are kept in memory only; stale
-or empty games are reaped automatically. Tip: in Settings you can also set a memory limit (e.g. 256 MB) and enable
+Footprint: ~55 MB RAM idle (node heap capped at 160 MB), no timers beyond a 30 second cleanup / heartbeat tick, so an idle
+server uses ~0 CPU. Optional env vars: `MAX_GAMES` (default 300), `MAX_SOCKETS` (default 1500). Games are kept in memory only. Dead games are reaped
+automatically: any game with no activity for 10 minutes, a lobby nobody is connected to after 2 minutes, and a started game
+whose players all dropped after 10 minutes. Every socket is pinged every 30 s, so a device that vanished (battery died, no
+signal) is dropped within a minute. Tip: in Settings you can also set a memory limit (e.g. 256 MB) and enable
 **Serverless** (app sleeping) if you want it to cost nothing while nobody plays — clients simply reconnect on wake.

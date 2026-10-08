@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { C, rules, Sound } from '../shared.js';
+import { C, MAX_NAME_LENGTH, cleanNameInput, containsYouTag, rules, sanitizeName, Sound } from '../shared.js';
 import { packs } from '../wordpacks.js';
 import { track } from '../analytics.js';
 import { safeStorage } from '../storage.js';
@@ -27,7 +27,12 @@ const emit = defineEmits(['client-message', 'audio-cue', 'join-game', 'spectate-
 
 const storage = safeStorage('local');
 if (props.initUserName != null) storage?.setItem('userName', props.initUserName);
-const name = ref(props.initUserName ?? storage?.getItem('userName') ?? '');
+const name = ref(sanitizeName(props.initUserName ?? storage?.getItem('userName') ?? ''));
+// a username can never contain "(you)" (the lobby adds its own tag to your own entry)
+watch(name, (v) => {
+  if (containsYouTag(v)) name.value = cleanNameInput(v);
+});
+const cleanName = computed(() => sanitizeName(name.value));
 const nameInput = ref();
 const startCooldown = ref(false);
 
@@ -57,7 +62,7 @@ function debounce(fn, ms) {
   };
 }
 const pushName = debounce(() => {
-  const n = name.value.trim();
+  const n = cleanName.value;
   storage?.setItem('userName', n);
   if (props.isConnected) emit('client-message', [C.UpdateUserName, n]);
 }, 500);
@@ -101,7 +106,7 @@ const startDisabled = computed(
       <div class="lobby-welcome-tagline">two teams of drawers face off with a frantic final round</div>
     </div>
 
-    <form v-if="!isSpectator" class="lobby-name-form" @submit.prevent="emit('join-game', name.trim())">
+    <form v-if="!isSpectator" class="lobby-name-form" @submit.prevent="cleanName && emit('join-game', cleanName)">
       <label class="lobby-name-label" for="nameInput">my name is</label>
       <input
         id="nameInput"
@@ -109,7 +114,7 @@ const startDisabled = computed(
         v-model="name"
         type="text"
         class="lobby-name-input"
-        maxlength="12"
+        :maxlength="MAX_NAME_LENGTH"
         autocorrect="off"
         spellcheck="false"
         :disabled="fishbowlWords !== undefined || starting"
@@ -117,7 +122,7 @@ const startDisabled = computed(
       />
       <template v-if="!isConnected">
         <div>
-          <Btn :force-rotation="-2" class="lobby-join-button" :disabled="name.trim().length === 0">join game</Btn>
+          <Btn :force-rotation="-2" icon="enter" class="lobby-join-button" :disabled="cleanName.length === 0">join game</Btn>
         </div>
         <div class="lobby-spectate-row">
           <a href="#" class="spectate-link" @click.prevent="emit('spectate-game')">join as spectator</a>
@@ -136,7 +141,7 @@ const startDisabled = computed(
             class="lobby-user"
             :class="{ submitted: fishbowlWords !== undefined && fishbowlWords[uid] !== undefined }"
           >
-            <span v-if="uid === userId">{{ name.trim() || 'anonymous' }} (you)</span>
+            <span v-if="uid === userId">{{ cleanName || 'anonymous' }} (you)</span>
             <Username v-else :user="users[uid]" />
           </div>
           <Btn
@@ -163,7 +168,7 @@ const startDisabled = computed(
       />
       <template v-else>
         <div class="lobby-start-container">
-          <Btn :force-rotation="0" :disabled="startDisabled" @click="startGame">
+          <Btn :force-rotation="0" icon="play" :disabled="startDisabled" @click="startGame">
             {{ starting ? `starting in ${startGameSecondsRemaining}...` : 'start game!' }}
           </Btn>
           <div class="lobby-start-subtext">

@@ -6,7 +6,8 @@
   "scripts": {
     "build": "vite build",
     "start": "node --max-old-space-size=160 server/index.js",
-    "dev": "node server/index.js"
+    "dev": "node server/index.js",
+    "test": "node --test"
   },
   "dependencies": {
     "express": "^5.2.1",

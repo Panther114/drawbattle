@@ -41,6 +41,9 @@ const shownScores = ref([]);
 const stage = ref(Stage.Score);
 const roundNumber = computed(() => props.previousRounds.length + 1);
 const isLastRound = computed(() => roundNumber.value === props.gameSettings.numRounds);
+// without the final drawdown the last round is the end of the game
+const showFinal = computed(() => isLastRound.value && rules.finalDrawdown);
+const lastNoFinal = computed(() => isLastRound.value && !rules.finalDrawdown);
 const readyLock = ref(false);
 const forceAvailable = ref(false);
 const timers = [];
@@ -82,7 +85,7 @@ function forceStart() {
   later(() => {
     stage.value = Stage.Drawer;
   }, t);
-  if (isLastRound.value) {
+  if (showFinal.value) {
     t += 1000;
     later(() => {
       stage.value = Stage.GetReadyFor;
@@ -113,7 +116,7 @@ const nextDrawers = computed(() => {
   const w = winner.value;
   return props.round.teamStates.map((ts, i) => {
     const drawer = ts.drawerId;
-    return i === w && !rules.alwaysRotate && props.users[drawer].status !== UserStatus.Disconnected
+    return i === w && !rules.alwaysRotate && props.teams[i].userIds.includes(drawer) && props.users[drawer].status !== UserStatus.Disconnected
       ? drawer
       : nextDrawer(props.teams[i], props.users, drawer);
   });
@@ -137,6 +140,10 @@ const showForce = computed(
 // what to render in each team column below the score
 function drawerBlock(i) {
   const showDrawer = stage.value >= Stage.Drawer;
+  if (lastNoFinal.value) {
+    const drawer = props.round.teamStates[i].drawerId;
+    return winner.value === i ? { kind: 'winner', id: drawer } : { kind: 'old', id: drawer };
+  }
   if (winner.value === i) {
     const drawer = props.round.teamStates[winner.value].drawerId;
     if (!showDrawer || (!isLastRound.value && nextDrawers.value[i] === drawer)) {
@@ -195,15 +202,15 @@ void drawingStartTime;
     </div>
 
     <Transition enter-from-class="sc-fade-enter-from" enter-active-class="sc-fade-enter-active">
-      <div v-if="isLastRound && stage >= Stage.GetReadyFor">it's time for...</div>
+      <div v-if="showFinal && stage >= Stage.GetReadyFor">it's time for...</div>
     </Transition>
     <Transition enter-from-class="sc-final-enter-from" enter-active-class="sc-final-enter-active">
-      <div v-if="isLastRound && stage >= Stage.TheFinalDrawdown" class="sc-final-title">the final drawdown!</div>
+      <div v-if="showFinal && stage >= Stage.TheFinalDrawdown" class="sc-final-title">the final drawdown!</div>
     </Transition>
 
     <Transition enter-from-class="sc-fade-enter-from" enter-active-class="sc-fade-enter-active">
       <div v-if="stage === Stage.Recap" class="sc-recap">
-        <div class="sc-team-columns">
+        <div v-if="!lastNoFinal" class="sc-team-columns">
           <div v-for="(team, i) in teams" :key="i" class="sc-team-column">
             <div class="sc-small-header">{{ isLastRound ? 'lineup' : 'on deck' }}</div>
             <div v-for="id in lineups[i]" :key="id" class="sc-on-deck" :class="{ 'sc-readied': isReady(id) }">
@@ -212,9 +219,9 @@ void drawingStartTime;
           </div>
         </div>
         <template v-if="!isSpectator">
-          <Btn :disabled="iAmReady" @click="ready">{{ iAmReady ? 'waiting...' : 'continue' }}</Btn>
+          <Btn :disabled="iAmReady" :icon="iAmReady ? 'check' : 'next'" @click="ready">{{ iAmReady ? 'waiting...' : lastNoFinal ? 'see results' : 'continue' }}</Btn>
           <button v-if="showForce" class="sc-force-start" @click="forceStart">
-            start {{ isLastRound ? 'final drawdown' : 'next round' }}
+            {{ lastNoFinal ? 'show the final results' : `start ${isLastRound ? 'final drawdown' : 'next round'}` }}
           </button>
           <div class="sc-continue-spacer" />
         </template>

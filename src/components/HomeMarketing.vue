@@ -31,11 +31,8 @@ const TIMINGS = [
   [40, 120],
   [40, 120],
   [40, 100],
-  [30, 100],
-  [30, 100],
-  [40, 200],
 ];
-// the mainland, then the islands, then a smiling face, in drawing order
+// the mainland, then the islands, in drawing order
 const STROKES = [
   smooth(MAINLAND, 3),
   smooth(VAN_ISLAND, 2),
@@ -44,9 +41,6 @@ const STROKES = [
   smooth(VICTORIA, 2),
   smooth(ELLESMERE, 2),
   smooth(BANKS, 2),
-  'M68.3 114.1L68.5 114.1',
-  'M82.3 114.1L82.5 114.1',
-  'M69.3 121.1Q75.3 128.1 81.3 121.1',
 ];
 const paths = STROKES.map(() => ref());
 const shown = ref(-1);
@@ -76,7 +70,7 @@ onMounted(() => {
           :key="i"
           :ref="(el) => (paths[i].value = el)"
           :d="d"
-          stroke="black"
+          stroke="currentColor"
           stroke-width="3"
           stroke-linecap="round"
           stroke-linejoin="round"

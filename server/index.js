@@ -4,7 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
-import { Game, randomGameId } from './game.js';
+import { Game, randomGameId, isStale } from './game.js';
 import {
   DEFAULT_WORD_LIST_ID,
   getOfficialPack,
@@ -21,6 +21,9 @@ const PORT = Number(process.env.PORT || 3000);
 const DIST = path.resolve(__dirname, '../dist');
 
 const games = new Map();
+
+const HEARTBEAT_MS = 30 * 1000;
+const REAP_MS = 30 * 1000;
 
 // ---- resource guards (keep the footprint small on a shared host) ----
 const MAX_GAMES = Number(process.env.MAX_GAMES || 300);
@@ -84,12 +87,12 @@ api.post('/games', (req, res) => {
   res.json({ gameId: game.id });
 });
 
-// public lobby list (streamer-mode games stay hidden)
+// public lobby list (streamer-mode games stay hidden; games nobody is connected to are dead and hidden too)
 api.get('/lobbies', (req, res) => {
   const list = [];
   for (const g of games.values()) {
     if (g.settings.streamerMode || g.finished) continue;
-    if (g.userCount === 0) continue;
+    if (g.activeCount === 0) continue;
     list.push(g.lobbyInfo());
   }
   list.sort((a, b) => Number(b.canJoin) - Number(a.canJoin) || b.players.length - a.players.length || a.id.localeCompare(b.id));
@@ -194,10 +197,16 @@ wss.on('connection', (ws, url) => {
     return;
   }
   socketCount += 1;
+  // liveness: a device that vanished (battery died, wifi lost) never closes its socket, so it is pinged and dropped
+  ws.isAlive = true;
+  ws.on('pong', () => {
+    ws.isAlive = true;
+  });
   let tokens = 300;
   let refill = Date.now();
   game.connect(ws, { userId, userName, spectate });
   ws.on('message', (data) => {
+    ws.isAlive = true;
     const raw = data.toString();
     if (raw === '_') return;
     // token bucket: ~150 msgs/s sustained, bursts of 300
@@ -215,19 +224,28 @@ wss.on('connection', (ws, url) => {
   ws.on('error', () => {});
 });
 
-// reap stale games; the interval is unref'd so an idle server has nothing scheduled but this
+// drop sockets that stopped answering (ping every 30 s; a silent socket is terminated on the next round)
+setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws.isAlive === false) {
+      ws.terminate();
+      continue;
+    }
+    ws.isAlive = false;
+    try {
+      ws.ping();
+    } catch {
+      // the socket is already closing
+    }
+  }
+}, HEARTBEAT_MS).unref();
+
+// reap dead games; the interval is unref'd so an idle server has nothing scheduled but this
 setInterval(
   () => {
     const now = Date.now();
     for (const [id, g] of games) {
-      const idle = now - g.lastActivity;
-      const live = g.socketTotal() > 0;
-      const stale =
-        (!live && g.userCount === 0 && idle > 15 * 60 * 1000) || // created but never used
-        (!live && idle > 30 * 60 * 1000) || // everyone left
-        (g.finished && idle > 60 * 60 * 1000) || // ended games linger for the recap
-        idle > 6 * 60 * 60 * 1000;
-      if (stale) {
+      if (isStale(g, now)) {
         g.destroy();
         games.delete(id);
       }
@@ -236,7 +254,7 @@ setInterval(
     for (const [ip, list] of packLog) if (!list.some((t) => now - t < 10 * 60 * 1000)) packLog.delete(ip);
     for (const [ip, list] of createLog) if (!list.some((t) => now - t < 10 * 60 * 1000)) createLog.delete(ip);
   },
-  5 * 60 * 1000,
+  REAP_MS,
 ).unref();
 
 for (const sig of ['SIGTERM', 'SIGINT']) {

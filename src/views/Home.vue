@@ -7,6 +7,7 @@ import { track } from '../analytics.js';
 import { takeJoinError } from '../nav.js';
 import { safeStorage } from '../storage.js';
 import Btn from '../components/Btn.vue';
+import Icon from '../components/Icon.vue';
 import TopNav from '../components/TopNav.vue';
 import HomeMarketing from '../components/HomeMarketing.vue';
 import HomeWordPackUnit from '../components/HomeWordPackUnit.vue';
@@ -60,6 +61,8 @@ function errorText(status, id, reason) {
       return `game ${code} already started. sorry!`;
     case JoinStatus.Full:
       return `game ${code} is full. sorry!`;
+    case JoinStatus.Kicked:
+      return `you were vote-kicked from game ${code}`;
     case JoinStatus.Closed:
       return reason === 'spectators' ? `game ${code} doesn't allow spectators` : `game ${code} doesn't allow late joiners`;
     default:
@@ -108,8 +111,8 @@ async function joinGame() {
 <template>
   <div class="hm-root">
     <TopNav>
-      <router-link to="/lobbies">lobbies</router-link>
-      <router-link to="/wordpacks">word pack editor</router-link>
+      <router-link to="/lobbies" class="nav-lobbies"><Icon name="people" />lobbies</router-link>
+      <router-link to="/wordpacks" class="nav-editor"><Icon name="pencil" />word pack editor</router-link>
     </TopNav>
     <div v-if="errorFromGame" class="hm-join-error-from-game">{{ errorText(errorFromGame.status, errorFromGame.gameId, errorFromGame.reason) }}</div>
     <div class="hm-title">
@@ -120,7 +123,7 @@ async function joinGame() {
     <HomeMarketing v-else class="hm-marketing-pos" />
     <div class="hm-button-row">
       <div class="hm-new-game-wrapper">
-        <Btn type="button" :force-rotation="-3" @click="togglePicker">new game</Btn>
+        <Btn type="button" :force-rotation="-3" icon="sparkle" @click="togglePicker">new game</Btn>
         <Transition name="hm-pop">
           <form v-if="picking" class="hm-picker" @submit.prevent="newGame">
             <div class="hm-picker-label">pick a game code</div>
@@ -139,7 +142,7 @@ async function joinGame() {
               <button type="button" class="hm-dice" @click="randomCode">random</button>
             </div>
             <div class="hm-picker-hint">4 letters, or leave it empty for a surprise</div>
-            <Btn type="submit" size="small" color="green" :force-rotation="2" :disabled="busy">
+            <Btn type="submit" size="small" color="green" :force-rotation="2" icon="play" :disabled="busy">
               {{ newCode.length === 4 ? `create ${newCode.toUpperCase()}` : 'create game' }}
             </Btn>
           </form>
@@ -161,7 +164,7 @@ async function joinGame() {
         />
         <div class="hm-join-input-line" />
         <div v-if="joinError" class="hm-inline-join-error">{{ errorText(joinError[0], joinError[1]) }}</div>
-        <Btn type="submit" :disabled="joinCode.length !== 4" :force-rotation="3" color="purple" class="hm-join-button">
+        <Btn type="submit" :disabled="joinCode.length !== 4" :force-rotation="3" color="purple" icon="enter" class="hm-join-button">
           join game
         </Btn>
       </form>

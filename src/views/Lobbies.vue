@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { API } from '../wordpacks.js';
 import Btn from '../components/Btn.vue';
+import Icon from '../components/Icon.vue';
 import TopNav from '../components/TopNav.vue';
 
 const router = useRouter();
@@ -54,7 +55,7 @@ const spectate = (l) => router.push({ name: 'Game', params: { gameId: l.id.toUpp
 
 <template>
   <div class="lb-root">
-    <TopNav><router-link to="/">back to home</router-link></TopNav>
+    <TopNav><router-link to="/" class="nav-home"><Icon name="home" />back to home</router-link></TopNav>
     <div class="lb-title">lobbies</div>
     <div class="lb-sub">every open game right now. hop in, or watch from the sidelines</div>
     <div v-if="failed" class="lb-note lb-error">couldn't reach the server, retrying...</div>
@@ -79,7 +80,7 @@ const spectate = (l) => router.push({ name: 'Game', params: { gameId: l.id.toUpp
           </span>
         </div>
         <div class="lb-actions">
-          <Btn v-if="l.canJoin" size="small" color="green" :force-rotation="-1" @click="join(l)">join</Btn>
+          <Btn v-if="l.canJoin" size="small" color="green" :force-rotation="-1" icon="enter" @click="join(l)">join</Btn>
           <Btn
             size="small"
             color="purple"

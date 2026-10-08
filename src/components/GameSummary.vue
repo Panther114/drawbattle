@@ -27,6 +27,9 @@ const stage = ref(Stage.Score);
 const wordIndex = ref(0);
 const showGuesses = ref(false);
 const finalRound = computed(() => props.game.finalRound);
+// the game may have been played without the final drawdown: then the recap walks through the rounds themselves
+const hasFinal = computed(() => props.game.finalRound !== undefined);
+const recapWords = computed(() => (hasFinal.value ? finalRound.value.words : props.game.previousRounds.map((r) => r.word)));
 let trackedGuesses = false;
 const timers = [];
 const later = (fn, ms) => timers.push(setTimeout(fn, ms));
@@ -41,6 +44,9 @@ function toggleGuesses(e) {
 
 // the final round replays earlier words: pair each team's original attempt with its final-round attempt
 function recapFor(index) {
+  if (!hasFinal.value) {
+    return props.game.previousRounds[index].teamStates.map((original) => [index, original, undefined]);
+  }
   const word = finalRound.value.words[index];
   const roundIdx = props.game.previousRounds.findIndex((r) => r.word === word);
   if (roundIdx === -1) throw new Error('Matching round not found for final round word');
@@ -81,10 +87,11 @@ function fireConfetti(angle) {
 
 // ---- reveal timeline ----
 {
-  const before = props.game.previousRounds
+  const roundsTotal = props.game.previousRounds
     .map((r) => roundScores(r))
     .reduce((a, b) => a.map((x, i) => x + b[i]));
-  const gained = finalRoundScores(finalRound.value);
+  const before = hasFinal.value ? roundsTotal : roundsTotal.map(() => 0);
+  const gained = hasFinal.value ? finalRoundScores(finalRound.value) : roundsTotal;
   shownScores.value = before;
   for (let step = 1; step <= 20; step++) {
     later(() => {
@@ -152,21 +159,21 @@ void displayName;
 
     <Transition enter-from-class="sm-fade-enter-from" enter-active-class="sm-fade-enter-active">
       <div v-if="stage >= Stage.Recap" class="sm-recap">
-        <Btn v-if="showBackToLobby" class="sm-back-button" @click="backToLobby">back to lobby</Btn>
+        <Btn v-if="showBackToLobby" class="sm-back-button" icon="back" @click="backToLobby">back to lobby</Btn>
         <div class="sm-recap-header">
           <div class="sm-recap-label">game recap</div>
           <div class="sm-word-select-row">
             <button class="sm-word-arrow prev" :disabled="wordIndex <= 0" @click="wordIndex = Math.max(wordIndex - 1, 0)" />
             <div class="sm-word-select-wrapper">
-              <div class="sm-word-select-text">{{ finalRound.words[wordIndex] }}</div>
+              <div class="sm-word-select-text">{{ recapWords[wordIndex] }}</div>
               <select v-model.number="wordIndex" class="sm-word-select">
-                <option v-for="(w, i) in finalRound.words" :key="i" :value="i">{{ w }}</option>
+                <option v-for="(w, i) in recapWords" :key="i" :value="i">{{ w }}</option>
               </select>
             </div>
             <button
               class="sm-word-arrow next"
-              :disabled="wordIndex >= finalRound.words.length - 1"
-              @click="wordIndex = Math.min(wordIndex + 1, finalRound.words.length - 1)"
+              :disabled="wordIndex >= recapWords.length - 1"
+              @click="wordIndex = Math.min(wordIndex + 1, recapWords.length - 1)"
             />
           </div>
           <div class="sm-show-guesses-row">
@@ -181,7 +188,7 @@ void displayName;
               :users="game.users"
               :team="game.teams[teamIdx]"
               :team-state="original"
-              :word="finalRound.words[wordIndex]"
+              :word="recapWords[wordIndex]"
               :drawing-stage-start-time="startTimeFor(original, teamIdx, roundIdx)"
               :on-summary-screen="true"
               :show-message-log="showGuesses"
@@ -193,7 +200,7 @@ void displayName;
               :users="game.users"
               :team="game.teams[teamIdx]"
               :team-state="redo"
-              :word="finalRound.words[wordIndex]"
+              :word="recapWords[wordIndex]"
               :drawing-stage-start-time="redo.startTime"
               :on-summary-screen="true"
               :show-message-log="showGuesses"

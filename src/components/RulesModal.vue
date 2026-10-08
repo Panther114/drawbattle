@@ -15,6 +15,10 @@ const num = (key, label, min, max, unit = '', zero) => ({ key, label, num: true,
 // every customisable rule: key, label and kind
 const GROUPS = [
   {
+    title: 'game',
+    items: [{ key: 'finalDrawdown', label: 'play the final drawdown (off: the game ends after the last round)', bool: true }],
+  },
+  {
     title: 'timing',
     items: [
       num('chooseWordSec', 'time to choose a word', 3, 120, 'sec'),

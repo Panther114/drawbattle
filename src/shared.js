@@ -27,6 +27,7 @@ export const DEFAULT_RULES = {
   allowLateJoin: true,
   singleWordsOnly: false, // only offer words without spaces
   maxWordLength: 0, // only offer words up to this many characters (0 = any)
+  finalDrawdown: true, // play the final drawdown after the last round (off: the game ends after the last round)
 };
 export const rules = reactive({ ...DEFAULT_RULES });
 export function applyRules(settings) {
@@ -51,9 +52,39 @@ export const HEAD_START_BASE_SEC = 3;
 export const HEAD_START_STEP_SEC = 1;
 export const MAX_TEAM_SIZE = 8;
 export const MAX_GUESS_LENGTH = 36;
+export const MAX_NAME_LENGTH = 16;
+export const MAX_CHAT_LENGTH = 140;
+
+// strictly more than half of the voters (7 players -> 6 voters -> 4 votes)
+export const voteThreshold = (voters) => Math.floor(voters / 2) + 1;
+
+// usernames never contain control characters or a "(you)" look-alike (the lobby adds its own "(you)" tag)
+const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
+const YOU_TAG = /\(\s*y\s*o\s*u\s*\)/gi;
+// live typing: strip only the forbidden tag (no trimming, so spaces can still be typed)
+export function containsYouTag(raw) {
+  return typeof raw === 'string' && /\(\s*y\s*o\s*u\s*\)/i.test(raw.normalize('NFKC').replace(INVISIBLE, ''));
+}
+export function cleanNameInput(raw) {
+  let n = raw.normalize('NFKC').replace(INVISIBLE, '');
+  for (let prev = ''; prev !== n; ) {
+    prev = n;
+    n = n.replace(YOU_TAG, '');
+  }
+  return n;
+}
+export function sanitizeName(raw) {
+  if (typeof raw !== 'string') return '';
+  let n = raw.normalize('NFKC').replace(INVISIBLE, '');
+  for (let prev = ''; prev !== n; ) {
+    prev = n;
+    n = n.replace(YOU_TAG, '');
+  }
+  return Array.from(n.replace(/\s+/g, ' ').trim()).slice(0, MAX_NAME_LENGTH).join('').trim();
+}
 
 // ---- enums ----
-export const UserStatus = { Connected: 1, Disconnected: 2 };
+export const UserStatus = { Connected: 1, Disconnected: 2, Kicked: 3 };
 
 export const RoundStage = {
   ChooseWord: 0,
@@ -87,6 +118,7 @@ export const Sound = {
 };
 
 export const JoinStatus = {
+  Kicked: 'Kicked',
   Nonexistent: 'Nonexistent',
   Started: 'Started',
   AvailableSpot: 'AvailableSpot',
@@ -115,6 +147,12 @@ export const S = {
   CancelStartGame: 17,
   CanvasOperation: 18,
   UpdateFishbowlWords: 19,
+  Chat: 20,
+  KickVotes: 21,
+  UserKicked: 22,
+  DrawerRotated: 23,
+  SwitchAppeals: 24,
+  GameOver: 25,
   ServerError: 300,
   ForceRefresh: 301,
 };
@@ -132,6 +170,10 @@ export const C = {
   CanvasOperation: 109,
   SubmitFishbowlWords: 110,
   ForceStartNextRound: 111,
+  Chat: 112,
+  VoteKick: 113,
+  SwitchAppeal: 114,
+  SwitchVote: 115,
 };
 
 // canvas operations
@@ -324,12 +366,15 @@ export function finalRoundWinner(finalRound) {
   return undefined;
 }
 
-export const isGameEnded = (game) => game.finalRound !== undefined && finalRoundWinner(game.finalRound) !== undefined;
+export const isGameEnded = (game) =>
+  game.ended === true || (game.finalRound !== undefined && finalRoundWinner(game.finalRound) !== undefined);
 
 // next connected teammate after `current` (wrapping), or `current` if alone
 export function nextDrawer(team, users, current) {
   const n = team.userIds.indexOf(current);
-  for (let s = 1; s < team.userIds.length; s++) {
+  // a drawer who left the team (kicked / switched) is not in the list, so every member is a candidate
+  const tries = n < 0 ? team.userIds.length : team.userIds.length - 1;
+  for (let s = 1; s <= tries; s++) {
     const id = team.userIds[(n + s) % team.userIds.length];
     if (users[id].status !== UserStatus.Disconnected) return id;
   }

@@ -7,6 +7,8 @@ import Terms from './views/Terms.vue';
 import Debug from './views/Debug.vue';
 import WordPacks from './views/WordPacks.vue';
 import Lobbies from './views/Lobbies.vue';
+import Stats from './views/Stats.vue';
+import { initTheme } from './theme.js';
 import { tooltip } from './tooltip.js';
 import { loadOfficialPacks } from './wordpacks.js';
 import './style.css';
@@ -22,6 +24,7 @@ const routes = [
   { path: '/debug', name: 'Debug', component: Debug },
   { path: '/wordpacks', name: 'WordPacks', component: WordPacks },
   { path: '/lobbies', name: 'Lobbies', component: Lobbies },
+  { path: '/stats', name: 'Stats', component: Stats },
   { path: '/wordpack/:wordListId(\\d+)', name: 'Wordpack', component: Home, props: true },
   {
     path: '/:gameId([a-zA-Z]{4})',
@@ -39,6 +42,7 @@ const routes = [
 
 const router = createRouter({ history: createWebHistory('/'), routes });
 const app = createApp(App);
+initTheme();
 app.directive('tooltip', tooltip);
 app.use(router);
 void loadOfficialPacks();

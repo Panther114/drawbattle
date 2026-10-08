@@ -20,6 +20,8 @@ import {
   applyRules,
   rules,
   findCorrectGuess,
+  roundWinner,
+  totalScores,
 } from '../shared.js';
 import { API } from '../wordpacks.js';
 import { track } from '../analytics.js';
@@ -27,8 +29,10 @@ import { nav, takePreviousGameUserName } from '../nav.js';
 import { playSound } from '../audio.js';
 import { ReconnectingSocket } from '../socket.js';
 import { safeStorage } from '../storage.js';
+import { recordGame, recordRound } from '../stats.js';
 import AudioPreloader from '../components/AudioPreloader.vue';
 import GameFinalRound from '../components/GameFinalRound.vue';
+import GameChat from '../components/GameChat.vue';
 import GameJoinAsDisconnectedUser from '../components/GameJoinAsDisconnectedUser.vue';
 import GameLobby from '../components/GameLobby.vue';
 import GameRound from '../components/GameRound.vue';
@@ -37,6 +41,7 @@ import GameSummary from '../components/GameSummary.vue';
 import SoundToggle from '../components/SoundToggle.vue';
 import SpectatorGameFinalRound from '../components/SpectatorGameFinalRound.vue';
 import SpectatorGameRound from '../components/SpectatorGameRound.vue';
+import ThemeToggle from '../components/ThemeToggle.vue';
 
 const props = defineProps({
   gameId: { type: String, required: true },
@@ -90,6 +95,7 @@ const finalRef = ref();
 const clockOffset = ref(0); // Date.now() - serverNow
 let tickTimer;
 let pingTimer;
+let wasLive = false; // true once this tab has been connected to the game as part of the session (for local stats)
 
 const currentRound = computed(() => game.value?.currentRound);
 const finalRound = computed(() => game.value?.finalRound);
@@ -97,7 +103,7 @@ const teamIndex = computed(() => {
   const teams = game.value?.teams;
   return teams ? teams.findIndex((t) => t.userIds.includes(userId.value)) : -1;
 });
-const isGameOver = computed(() => finalStage.value?.stage === FinalRoundStage.SummaryScreen);
+const isGameOver = computed(() => finalStage.value?.stage === FinalRoundStage.SummaryScreen || game.value?.ended === true);
 provide('isGameOver', isGameOver);
 
 // per-game rules follow the game's settings (they can only change in the lobby)
@@ -244,6 +250,7 @@ function onMessage(e) {
       const [, snapshot, serverNow] = m;
       game.value = snapshot;
       connStatus.value = Conn.Connected;
+      wasLive = true;
       clockOffset.value = Date.now() - serverNow;
       break;
     }
@@ -390,10 +397,64 @@ function onMessage(e) {
     case S.UpdateFishbowlWords:
       if (g !== undefined) g.fishbowlWords = m[1];
       break;
+    case S.Chat:
+      if (g !== undefined) {
+        if (!g.chat) g.chat = [];
+        g.chat.push(m[1]);
+        if (g.chat.length > 80) g.chat.splice(0, g.chat.length - 80);
+      }
+      break;
+    case S.KickVotes:
+      if (g !== undefined) g.kickVotes = m[1];
+      break;
+    case S.SwitchAppeals:
+      if (g !== undefined) g.switchAppeals = m[1];
+      break;
+    case S.UserKicked: {
+      if (g === undefined) break;
+      const [, id, teams, removed] = m;
+      if (removed) delete g.users[id];
+      else if (g.users[id]) g.users[id].status = UserStatus.Kicked;
+      g.teams = teams;
+      const idx = g.previousRounds.length;
+      if (readyUserIds.value[idx] !== undefined) readyUserIds.value[idx].delete(id);
+      break;
+    }
+    case S.DrawerRotated: {
+      if (g === undefined) break;
+      const [, where, team, drawerId, chooserId] = m;
+      if (Array.isArray(where)) {
+        const st = g.finalRound?.teamStates[team]?.[where[0]];
+        if (st) st.drawerId = drawerId;
+      } else if (g.currentRound !== undefined && where === g.previousRounds.length) {
+        g.currentRound.teamStates[team].drawerId = drawerId;
+        if (chooserId !== undefined) g.currentRound.chooserId = chooserId;
+      }
+      break;
+    }
+    case S.GameOver:
+      // the last round was the end of the game (no final drawdown)
+      if (g !== undefined && g.currentRound !== undefined) {
+        g.previousRounds.push(g.currentRound);
+        g.currentRound = undefined;
+        g.ended = true;
+        showBackToLobby.value = true;
+        setTimeout(() => {
+          if (socket !== undefined) {
+            teardown();
+            connStatus.value = Conn.Disconnected;
+          }
+        }, 1500);
+      }
+      break;
     case S.ServerError:
       if (m[1].type === 'Closed') {
         teardown();
         nav.joinError = { status: JoinStatus.Closed, gameId: gameId.value, reason: m[1].reason };
+        router.replace({ name: 'Home' });
+      } else if (m[1].type === 'Kicked') {
+        teardown();
+        nav.joinError = { status: JoinStatus.Kicked, gameId: gameId.value };
         router.replace({ name: 'Home' });
       } else if (m[1].type === 'GameNotFound') {
         teardown();
@@ -498,6 +559,24 @@ watch(joinStatus, (s) => {
   }
 });
 
+// ---- personal stats (kept in this browser only) ----
+const gameKey = computed(() => (game.value ? `${game.value.id}-${game.value.createdAt ?? 0}` : undefined));
+const isPlayer = computed(() => wasLive && !isSpectator.value && teamIndex.value >= 0);
+watch(roundStage, (stage) => {
+  const r = currentRound.value;
+  if (stage !== RoundStage.ScoreScreen || r === undefined || !isPlayer.value || r.word === undefined) return;
+  const ti = teamIndex.value;
+  recordRound(gameKey.value, game.value.previousRounds.length, r.teamStates[ti].drawerId === userId.value ? 'd' : 'g', roundWinner(r) === ti);
+});
+function recordFinish() {
+  const g = game.value;
+  if (g === undefined || !isPlayer.value || g.previousRounds.length === 0) return;
+  const totals = totalScores(g.previousRounds, g.finalRound);
+  const mine = totals[teamIndex.value];
+  const theirs = totals[1 - teamIndex.value];
+  recordGame(gameKey.value, mine > theirs ? 'win' : mine < theirs ? 'loss' : 'draw', mine, theirs);
+}
+
 watch(finalStage, (s) => {
   if (s?.stage !== undefined && s.stage !== FinalRoundStage.SummaryScreen) showBackToLobby.value = true;
   if (s?.stage === FinalRoundStage.SummaryScreen && socket !== undefined) {
@@ -541,7 +620,7 @@ const view = computed(() => {
   if (g === undefined || (joinStatus.value !== undefined && !isUnavailableJoinStatus(joinStatus.value)) || isAutoConnecting.value) {
     return 'empty';
   }
-  if (finalStage.value?.stage === FinalRoundStage.SummaryScreen) return 'summary';
+  if (finalStage.value?.stage === FinalRoundStage.SummaryScreen || g.ended === true) return 'summary';
   if (!isSpectator.value && joinStatus.value === JoinStatus.AvailableDisconnectedSpot) return 'rejoin';
   if ((currentRound.value === undefined && finalRound.value === undefined) || startCountdown.value !== undefined) return 'lobby';
   if (connStatus.value !== Conn.Connected) return 'empty';
@@ -551,6 +630,10 @@ const view = computed(() => {
   }
   if (roundStage.value === RoundStage.ScoreScreen) return 'score';
   return isSpectator.value ? 'roundSpectator' : 'round';
+});
+
+watch(view, (v) => {
+  if (v === 'summary') recordFinish();
 });
 </script>
 
@@ -562,9 +645,12 @@ const view = computed(() => {
         <span>game {{ game.settings.streamerMode ? '****' : gameId.toUpperCase() }}</span>
         <router-link v-tooltip="'leave game'" to="/" class="leave-link" />
       </div>
-      <div v-if="!isIOS()" class="game-info-row">
-        <span>sounds</span>
-        <SoundToggle class="sound-toggle-pos" :enabled="soundsEnabled" @toggle="soundsEnabled = !soundsEnabled" />
+      <div class="game-info-row">
+        <template v-if="!isIOS()">
+          <span>sounds</span>
+          <SoundToggle class="sound-toggle-pos" :enabled="soundsEnabled" @toggle="soundsEnabled = !soundsEnabled" />
+        </template>
+        <ThemeToggle class="sound-toggle-pos" />
       </div>
     </div>
 
@@ -667,6 +753,14 @@ const view = computed(() => {
       @client-message="send"
       @canvas-operation="sendCanvasOp"
       @audio-cue="audioCue"
+    />
+    <GameChat
+      v-if="game && isConnected && view !== 'empty'"
+      :game="game"
+      :user-id="userId"
+      :is-spectator="isSpectator"
+      :between-rounds="view === 'score'"
+      @client-message="send"
     />
     <AudioPreloader v-if="!isIOS()" />
   </div>

@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import Icon from './Icon.vue';
 defineOptions({ inheritAttrs: false });
 const props = defineProps({
   color: { type: String, default: 'blue' },
@@ -7,6 +8,7 @@ const props = defineProps({
   size: { type: String, default: 'default' },
   forceRotation: Number,
   wordChoiceButton: { type: Boolean, default: false },
+  icon: { type: String, default: '' },
 });
 // each button keeps a fixed random tilt, like the hand-drawn original
 const rotation = computed(() => props.forceRotation ?? 3 - Math.round(6 * Math.random()));
@@ -20,6 +22,7 @@ const rotation = computed(() => props.forceRotation ?? 3 - Math.round(6 * Math.r
       :class="[color, { small: size === 'small', 'word-choice': wordChoiceButton }]"
       :disabled="disabled"
     >
+      <Icon v-if="icon" :name="icon" class="btn-icon" />
       <slot />
     </button>
   </div>

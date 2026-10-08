@@ -210,7 +210,7 @@ const listIds = computed(() => {
               @change="changeRounds"
               @keydown.enter.prevent="$event.target.blur()"
             />
-            <div>rounds + the final drawdown</div>
+            <div>{{ gameSettings.finalDrawdown === false ? 'rounds' : 'rounds + the final drawdown' }}</div>
           </div>
           <div v-else class="st-item st-not-enough-words">word pack needs more words!</div>
           <div class="st-item">
