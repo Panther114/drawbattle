@@ -1,10 +1,12 @@
-// Quick Switch: a hotkey that instantly covers the game with a page you chose (a website or a local .html / .pdf).
+// Quick Switch: a hotkey that instantly covers the game with a page you chose: the built-in PDF (default), a local
+// .html / .pdf file, or a website.
 // Everything here stays in this browser: settings in localStorage, the chosen file in IndexedDB. Nothing is sent
 // to the server or anywhere else; the page is just loaded by the browser like any other.
 import { computed, reactive } from 'vue';
 import { safeStorage } from './storage.js';
 
-export const DEFAULT_URL = 'https://chat.deepseek.com';
+export const DEFAULT_PDF = '/quick-switch-default.pdf'; // ships with the app (public/)
+const OLD_DEFAULT_URL = 'https://chat.deepseek.com/'; // earlier versions defaulted to this website
 export const MAX_FILE_BYTES = 60 * 1024 * 1024;
 const KEY = 'drawbattle.quickswitch.v1';
 const storage = safeStorage('local');
@@ -20,8 +22,8 @@ export function defaultBinds() {
 
 const defaults = () => ({
   enabled: true,
-  mode: 'site', // 'site' | 'file'
-  url: DEFAULT_URL,
+  mode: 'default', // 'default' (the built-in PDF) | 'file' (a local .html / .pdf) | 'site' (a website)
+  url: '',
   display: 'frame', // 'frame' (covers the page) | 'popup' (a separate window sized to the screen)
   binds: defaultBinds(), // what switches: [{ t: 'k', code, key, label } | { t: 'm', button, label }]
   file: undefined, // { name, kind: 'html' | 'pdf' }
@@ -33,8 +35,13 @@ function load() {
     const p = JSON.parse(storage?.getItem(KEY) ?? 'null');
     if (p && typeof p === 'object') {
       if (typeof p.enabled === 'boolean') d.enabled = p.enabled;
-      if (p.mode === 'site' || p.mode === 'file') d.mode = p.mode;
+      if (p.mode === 'default' || p.mode === 'site' || p.mode === 'file') d.mode = p.mode;
       if (typeof p.url === 'string' && normalizeUrl(p.url)) d.url = p.url;
+      // the old default website is no longer the default: those players move to the built-in PDF
+      if (normalizeUrl(d.url) === OLD_DEFAULT_URL) {
+        d.url = '';
+        if (d.mode === 'site') d.mode = 'default';
+      }
       if (p.display === 'frame' || p.display === 'popup') d.display = p.display;
       if (Array.isArray(p.binds)) d.binds = p.binds.filter(validBind).slice(0, 12);
       if (p.file && typeof p.file.name === 'string' && (p.file.kind === 'html' || p.file.kind === 'pdf')) d.file = { name: p.file.name, kind: p.file.kind };
@@ -166,7 +173,7 @@ export async function chooseFile(file) {
 
 export async function clearFile() {
   qs.file = undefined;
-  if (qs.mode === 'file') qs.mode = 'site';
+  if (qs.mode === 'file') qs.mode = 'default';
   save();
   try {
     await idb('readwrite', (s) => s.delete('file'));
@@ -181,16 +188,35 @@ void showStoredFile();
 // address the cover frame / pop-up shows
 export const qsSrc = computed(() => {
   if (!qs.enabled) return '';
+  if (qs.mode === 'default') return DEFAULT_PDF;
   if (qs.mode === 'file') return qs.blobUrl;
   return normalizeUrl(qs.url) ?? '';
 });
 export const qsIsHtmlFile = computed(() => qs.mode === 'file' && qs.file?.kind === 'html');
+// a PDF is drawn by the page itself (see PdfCover.vue), so its clicks and keys always reach the hotkeys.
+// Only a website has to live in a frame, and a frame owned by another site never passes events up.
+export const qsIsPdf = computed(() => qs.mode === 'default' || (qs.mode === 'file' && qs.file?.kind === 'pdf'));
+
+// back to the built-in PDF, the default hotkeys and the in-page cover
+export function restoreDefaults() {
+  const d = defaults();
+  qs.enabled = d.enabled;
+  qs.mode = d.mode;
+  qs.display = d.display;
+  qs.binds = d.binds;
+  saveSettings();
+  void showStoredFile();
+}
 
 // ---- showing / hiding ----
 let popup;
 let frameEl;
+let coverEl;
 export const registerFrame = (el) => {
   frameEl = el;
+};
+export const registerCover = (el) => {
+  coverEl = el;
 };
 
 export function closeQuick() {
@@ -244,7 +270,7 @@ export function toggleQuick() {
   queueMicrotask(() => {
     try {
       document.activeElement?.blur?.();
-      frameEl?.parentElement?.focus?.({ preventScroll: true });
+      coverEl?.focus?.({ preventScroll: true });
     } catch {
       // ignore
     }
@@ -254,6 +280,7 @@ export function toggleQuick() {
 // ---- hotkeys (every page) ----
 let sideBtnAt = 0;
 let sideBtn = 0;
+let pressAt = 0;
 function onKeyDown(e) {
   if (!qs.armed || !qs.enabled || qs.capturing || !matchKey(e)) return;
   e.preventDefault();
@@ -266,7 +293,14 @@ function onMouse(e) {
   sideBtn = e.button;
   e.preventDefault();
   e.stopPropagation();
-  if (e.type === 'mousedown') toggleQuick();
+  // pointerdown comes first and, once cancelled, the browser sends no mousedown: act on the first of the two
+  if (e.type === 'pointerdown' || e.type === 'mousedown') {
+    const now = performance.now();
+    if (now - pressAt > 300) {
+      pressAt = now;
+      toggleQuick();
+    }
+  }
 }
 // some browsers still navigate on the side buttons; take that step right back
 function onPopState() {
@@ -306,8 +340,9 @@ export function captureBind() {
   return new Promise((resolve) => {
     const done = (b) => {
       window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('pointerdown', onMouseDown, true);
       window.removeEventListener('mousedown', onMouseDown, true);
-      for (const n of ['mouseup', 'pointerup', 'pointerdown', 'auxclick', 'click']) window.removeEventListener(n, swallow, true);
+      for (const n of ['mouseup', 'pointerup', 'auxclick', 'click']) window.removeEventListener(n, swallow, true);
       stopCapture = undefined;
       // let the matching release / click events pass before the normal hotkeys come back
       setTimeout(() => (qs.capturing = false), 350);
@@ -330,13 +365,15 @@ export function captureBind() {
       if (e.button === 0 || e.button === 2) return; // left and right clicks stay normal
       e.preventDefault();
       e.stopPropagation();
-      if (e.button < 1 || e.button > 4) return;
+      if (e.button < 1 || e.button > 4 || !MOUSE_NAMES[e.button]) return;
       done({ t: 'm', button: e.button, label: MOUSE_NAMES[e.button] });
     };
     stopCapture = () => done(undefined);
     window.addEventListener('keydown', onKey, { capture: true, passive: false });
+    // pointerdown arrives before mousedown (and cancelling it removes the mousedown), so listen to both
+    window.addEventListener('pointerdown', onMouseDown, { capture: true, passive: false });
     window.addEventListener('mousedown', onMouseDown, { capture: true, passive: false });
-    for (const n of ['mouseup', 'pointerup', 'pointerdown', 'auxclick', 'click']) window.addEventListener(n, swallow, { capture: true, passive: false });
+    for (const n of ['mouseup', 'pointerup', 'auxclick', 'click']) window.addEventListener(n, swallow, { capture: true, passive: false });
   });
 }
 export function cancelCapture() {

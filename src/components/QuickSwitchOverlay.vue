@@ -1,7 +1,8 @@
 <script setup>
-import { onBeforeUnmount, ref, watch } from 'vue';
-import { closeQuick, qs, qsIsHtmlFile, qsSrc, registerFrame } from '../quickswitch.js';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { closeQuick, qs, qsIsHtmlFile, qsIsPdf, qsSrc, registerCover, registerFrame } from '../quickswitch.js';
 import Icon from './Icon.vue';
+import PdfCover from './PdfCover.vue';
 
 // The cover page is loaded once, as soon as a game page is on screen, and only shown / hidden afterwards:
 // switching is instant and the page keeps whatever state it had.
@@ -18,13 +19,18 @@ watch(
   { immediate: true },
 );
 watch(frame, (el) => registerFrame(el ?? undefined));
-onBeforeUnmount(() => registerFrame(undefined));
+onMounted(() => registerCover(wrap.value));
+onBeforeUnmount(() => {
+  registerFrame(undefined);
+  registerCover(undefined);
+});
 </script>
 
 <template>
   <div ref="wrap" class="qs-cover" :class="{ open: qs.open && qs.display === 'frame' }" tabindex="-1" :inert="qs.open && qs.display === 'frame' ? undefined : ''">
+    <PdfCover v-if="loadedSrc && qsIsPdf" :src="loadedSrc" :open="qs.open" />
     <iframe
-      v-if="loadedSrc"
+      v-else-if="loadedSrc"
       ref="frame"
       class="qs-frame"
       :src="loadedSrc"

@@ -1,27 +1,25 @@
 <script setup>
 import { computed, onBeforeUnmount, ref } from 'vue';
-import { DEFAULT_URL, addBind, cancelCapture, captureBind, chooseFile, clearFile, normalizeUrl, qs, removeBind, resetBinds, saveSettings, toggleQuick } from '../quickswitch.js';
+import { addBind, cancelCapture, captureBind, chooseFile, clearFile, normalizeUrl, qs, removeBind, resetBinds, restoreDefaults, saveSettings, toggleQuick } from '../quickswitch.js';
 import Icon from '../components/Icon.vue';
 import TopNav from '../components/TopNav.vue';
 
 const urlText = ref(qs.url);
-const urlOk = computed(() => normalizeUrl(urlText.value) !== undefined);
+const urlOk = computed(() => urlText.value.trim() === '' || normalizeUrl(urlText.value) !== undefined);
+const urlFilled = computed(() => normalizeUrl(urlText.value) !== undefined);
 const fileMsg = ref('');
 const fileInput = ref();
 
 function commitUrl() {
   const u = normalizeUrl(urlText.value);
   if (u === undefined) {
+    if (urlText.value.trim() === '') return;
     urlText.value = qs.url;
     return;
   }
   qs.url = u;
   urlText.value = u;
   saveSettings();
-}
-function resetUrl() {
-  urlText.value = DEFAULT_URL;
-  commitUrl();
 }
 function setMode(m) {
   qs.mode = m;
@@ -46,7 +44,7 @@ async function addKey() {
   if (b) bindMsg.value = addBind(b) ?? '';
 }
 onBeforeUnmount(cancelCapture);
-const canTest = computed(() => qs.enabled && (qs.mode === 'site' ? urlOk.value : !!qs.blobUrl));
+const canTest = computed(() => qs.enabled && (qs.mode === 'default' || (qs.mode === 'site' ? urlFilled.value : !!qs.blobUrl)));
 function test() {
   if (qs.mode === 'site') commitUrl();
   toggleQuick();
@@ -70,11 +68,15 @@ function test() {
     <div class="qsw-card" :class="{ off: !qs.enabled }">
       <div class="qsw-title">what to show</div>
       <div class="qsw-choice">
-        <button class="qsw-pill" :class="{ on: qs.mode === 'site' }" @click="setMode('site')"><Icon name="code" />website</button>
-        <button class="qsw-pill" :class="{ on: qs.mode === 'file' }" @click="setMode('file')"><Icon name="list" />local file</button>
+        <button class="qsw-pill" :class="{ on: qs.mode === 'default' }" @click="setMode('default')"><Icon name="sparkle" />default (PDF)</button>
+        <button class="qsw-pill" :class="{ on: qs.mode === 'file' }" @click="setMode('file')"><Icon name="list" />custom local file</button>
+        <button class="qsw-pill" :class="{ on: qs.mode === 'site' }" @click="setMode('site')"><Icon name="code" />custom website</button>
       </div>
 
-      <template v-if="qs.mode === 'site'">
+      <template v-if="qs.mode === 'default'">
+        <div class="qsw-hint">shows the PDF that comes with the game. it is drawn by the page itself, so the hotkeys keep working however much you click and scroll in it.</div>
+      </template>
+      <template v-else-if="qs.mode === 'site'">
         <div class="qsw-line">
           <input
             v-model="urlText"
@@ -84,13 +86,12 @@ function test() {
             inputmode="url"
             spellcheck="false"
             autocomplete="off"
-            placeholder="https://chat.deepseek.com"
+            placeholder="https://example.com"
             @change="commitUrl"
             @keydown.enter.prevent="$event.target.blur()"
           />
-          <button class="qsw-small" :disabled="urlText === DEFAULT_URL" @click="resetUrl">default</button>
         </div>
-        <div class="qsw-hint">the page loads quietly in the background as soon as you are in a game, so it appears instantly.</div>
+        <div class="qsw-hint">the page loads quietly in the background, so it appears instantly. a website lives in a frame that belongs to that site: once you click inside it, the hotkeys cannot reach you any more, so close it with the bolt button in the corner (or switch to the default PDF, which has no such limit).</div>
       </template>
       <template v-else>
         <div class="qsw-line">
@@ -136,6 +137,7 @@ function test() {
 
     <div class="qsw-foot">
       <button class="qsw-test" :disabled="!canTest" @click="test"><Icon name="play" />try it now</button>
+      <button class="qsw-small qsw-restore" @click="restoreDefaults"><Icon name="swap" />restore default settings</button>
       <div class="qsw-hint">click the small bolt in the top corner to come back. inside a game the hotkey works too, until you click into a website: from then on use the bolt button.</div>
     </div>
   </div>

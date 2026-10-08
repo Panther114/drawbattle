@@ -90,20 +90,25 @@ extra load while a game is running.
 
 ### quick switch
 
-The **quick switch** page (top left of every page, between *my stats* and *github*) picks a page to show instantly in a game:
-a website (default `https://chat.deepseek.com`, any https link works) or a local `.html` / `.pdf` file. The page is loaded in
-the background as soon as you are in a game, and then shown or hidden with:
+The **quick switch** page (top left of every page, between *my stats* and *github*) picks what to show instantly, in three modes:
+
+* **default (PDF)** – the PDF that ships with the game (`public/quick-switch-default.pdf`). It is drawn by the page itself with pdf.js, not
+  by a frame or the browser viewer, so the hotkeys keep working however much you click and scroll in it.
+* **custom local file** – your own `.html` or `.pdf` (PDFs are drawn the same way; `.html` files get a small helper so the hotkeys work inside them).
+* **custom website** – any https link. A website has to live in a frame owned by that site, and browsers never pass keys or mouse
+  buttons out of such a frame, so once you click inside it the hotkeys cannot reach you: use the small bolt button in the corner,
+  or the pop-up window mode.
+
+**restore default settings** switches back to the PDF with the default hotkeys. The page is loaded in the background once the game is
+open, so it appears instantly. It is shown or hidden with:
 
 * the **Tab** key, the **`** key, or the **extra mouse buttons** (back / forward) by default, on every page of the game. These
   keys are taken over so they do not move focus or leave the page. Choose your own under *hotkeys*: press **add a hotkey**
   and then the key or mouse button you want (plain keys only, no Ctrl / Alt / Shift; left and right click are reserved).
-  Remove any of them with the x, or switch the whole feature off.
 * phones get a small on-screen button next to the sound toggle instead.
 
 Everything stays on your device: the settings are in localStorage and a chosen file is kept in your browser's IndexedDB.
-Notes: some websites forbid being shown inside another page, so there is a **pop-up window** mode that opens it in its own
-screen-sized window; and a website you click into receives the keyboard itself, so after that use the small bolt button in the
-top corner (or click back on the game) to return. Local `.html` files get a small helper so the hotkeys keep working inside them.
+Some websites forbid being shown inside another page, so there is a **pop-up window** mode that opens it in its own screen-sized window.
 
 ### dark mode
 

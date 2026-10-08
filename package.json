@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "express": "^5.2.1",
+    "pdfjs-dist": "4.10.38",
     "ws": "^8.22.0"
   },
   "devDependencies": {
