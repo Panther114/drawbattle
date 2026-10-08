@@ -4889,6 +4889,43 @@ body {
   color: var(--gray);
   font-size: 16px;
 }
+.qsw-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.qsw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 17px;
+  border: 2px solid var(--rule);
+  border-radius: 999px;
+  padding: 2px 6px 2px 12px;
+  background: var(--glass-a0);
+}
+.qsw-chip .ic {
+  width: 16px;
+  height: 16px;
+  color: #7c6ce0;
+}
+.qsw-x {
+  border: 0;
+  background: transparent;
+  color: var(--gray);
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 6px;
+  cursor: pointer;
+}
+.qsw-x:hover {
+  color: var(--rorange);
+}
+.qsw-small.listening {
+  border-color: var(--black);
+  background: var(--glass-a0);
+}
 .qsw-foot {
   text-align: center;
   margin-top: 8px;

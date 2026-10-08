@@ -34,7 +34,7 @@ import { safeStorage } from '../storage.js';
 import { recordGame, recordRound } from '../stats.js';
 import { buildFacts, creditFor, recordMatch, score } from '../rating.js';
 import { presence, trackPresence } from '../presence.js';
-import { qs, setArmed, toggleQuick } from '../quickswitch.js';
+import { qs, toggleQuick } from '../quickswitch.js';
 import Icon from '../components/Icon.vue';
 import AudioPreloader from '../components/AudioPreloader.vue';
 import GameFinalRound from '../components/GameFinalRound.vue';
@@ -644,7 +644,6 @@ watch(finalStage, (s) => {
 });
 
 onMounted(async () => {
-  setArmed(true);
   trackPresence();
   if (props.summaryUrl !== undefined) {
     const res = await fetch(props.summaryUrl);
@@ -665,7 +664,6 @@ onMounted(async () => {
   }, 100);
 });
 onUnmounted(() => {
-  setArmed(false);
   teardown();
   if (tickTimer !== undefined) clearInterval(tickTimer);
 });

@@ -1,6 +1,6 @@
 <script setup>
-import { computed, ref } from 'vue';
-import { DEFAULT_URL, chooseFile, clearFile, normalizeUrl, qs, saveSettings, toggleQuick } from '../quickswitch.js';
+import { computed, onBeforeUnmount, ref } from 'vue';
+import { DEFAULT_URL, addBind, cancelCapture, captureBind, chooseFile, clearFile, normalizeUrl, qs, removeBind, resetBinds, saveSettings, toggleQuick } from '../quickswitch.js';
 import Icon from '../components/Icon.vue';
 import TopNav from '../components/TopNav.vue';
 
@@ -38,6 +38,14 @@ async function removeFile() {
   await clearFile();
 }
 const change = () => saveSettings();
+const bindMsg = ref('');
+async function addKey() {
+  if (qs.capturing) return cancelCapture();
+  bindMsg.value = '';
+  const b = await captureBind();
+  if (b) bindMsg.value = addBind(b) ?? '';
+}
+onBeforeUnmount(cancelCapture);
 const canTest = computed(() => qs.enabled && (qs.mode === 'site' ? urlOk.value : !!qs.blobUrl));
 function test() {
   if (qs.mode === 'site') commitUrl();
@@ -56,7 +64,7 @@ function test() {
         <label class="qsw-label" for="qsEnabled"><Icon name="bolt" class="stt-ic c-purple" />turn quick switch on</label>
         <input id="qsEnabled" v-model="qs.enabled" type="checkbox" @change="change" />
       </div>
-      <div class="qsw-hint">in a game, the hotkeys below show your page full screen. press one again to go back. your teammates see a sleepy icon next to your name while it is open.</div>
+      <div class="qsw-hint">on any page, the hotkeys below show your page full screen. press one again to go back. your teammates see a sleepy icon next to your name while it is open.</div>
     </div>
 
     <div class="qsw-card" :class="{ off: !qs.enabled }">
@@ -110,11 +118,20 @@ function test() {
     </div>
 
     <div class="qsw-card" :class="{ off: !qs.enabled }">
-      <div class="qsw-title">hotkeys (only inside a game)</div>
-      <div class="qsw-row"><label class="qsw-label" for="kTab">Tab key</label><input id="kTab" v-model="qs.keys.tab" type="checkbox" @change="change" /></div>
-      <div class="qsw-row"><label class="qsw-label" for="kBq">` key</label><input id="kBq" v-model="qs.keys.backquote" type="checkbox" @change="change" /></div>
-      <div class="qsw-row"><label class="qsw-label" for="kMouse">extra mouse buttons (back / forward)</label><input id="kMouse" v-model="qs.keys.mouse" type="checkbox" @change="change" /></div>
-      <div class="qsw-hint">these keys are taken over while a game is open, so they no longer move focus or go back a page.</div>
+      <div class="qsw-title">hotkeys (on every page)</div>
+      <div class="qsw-chips">
+        <span v-for="(b, i) in qs.binds" :key="i" class="qsw-chip">
+          <Icon :name="b.t === 'm' ? 'enter' : 'list'" />{{ b.label }}
+          <button class="qsw-x" :aria-label="'remove ' + b.label" @click="removeBind(i)">&times;</button>
+        </span>
+        <span v-if="!qs.binds.length" class="qsw-hint">no hotkeys: use the button in the corner of a game</span>
+      </div>
+      <div class="qsw-line">
+        <button class="qsw-small" :class="{ listening: qs.capturing }" @click="addKey">{{ qs.capturing ? 'press a key or mouse button... (Esc cancels)' : 'add a hotkey' }}</button>
+        <button class="qsw-small" @click="resetBinds">back to the defaults</button>
+      </div>
+      <div v-if="bindMsg" class="qsw-warn">{{ bindMsg }}</div>
+      <div class="qsw-hint">press any key (no Ctrl, Alt or Shift) or a mouse button (middle, back, forward). These are taken over on every page of the game, so they no longer move focus or go back a page. Left and right clicks can't be used.</div>
     </div>
 
     <div class="qsw-foot">

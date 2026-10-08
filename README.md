@@ -94,8 +94,10 @@ The **quick switch** page (top left of every page, between *my stats* and *githu
 a website (default `https://chat.deepseek.com`, any https link works) or a local `.html` / `.pdf` file. The page is loaded in
 the background as soon as you are in a game, and then shown or hidden with:
 
-* the **Tab** key, the **`** key, or the **extra mouse buttons** (back / forward). Inside a game these keys are taken over so they
-  do not move focus or leave the page; each one can be switched off, as can the whole feature.
+* the **Tab** key, the **`** key, or the **extra mouse buttons** (back / forward) by default, on every page of the game. These
+  keys are taken over so they do not move focus or leave the page. Choose your own under *hotkeys*: press **add a hotkey**
+  and then the key or mouse button you want (plain keys only, no Ctrl / Alt / Shift; left and right click are reserved).
+  Remove any of them with the x, or switch the whole feature off.
 * phones get a small on-screen button next to the sound toggle instead.
 
 Everything stays on your device: the settings are in localStorage and a chosen file is kept in your browser's IndexedDB.

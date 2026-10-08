@@ -9,12 +9,21 @@ export const MAX_FILE_BYTES = 60 * 1024 * 1024;
 const KEY = 'drawbattle.quickswitch.v1';
 const storage = safeStorage('local');
 
+export function defaultBinds() {
+  return [
+    { t: 'k', code: 'Tab', key: 'Tab', label: 'Tab' },
+    { t: 'k', code: 'Backquote', key: '`', label: '`' },
+    { t: 'm', button: 3, label: 'mouse back button' },
+    { t: 'm', button: 4, label: 'mouse forward button' },
+  ];
+}
+
 const defaults = () => ({
   enabled: true,
   mode: 'site', // 'site' | 'file'
   url: DEFAULT_URL,
   display: 'frame', // 'frame' (covers the page) | 'popup' (a separate window sized to the screen)
-  keys: { tab: true, backquote: true, mouse: true },
+  binds: defaultBinds(), // what switches: [{ t: 'k', code, key, label } | { t: 'm', button, label }]
   file: undefined, // { name, kind: 'html' | 'pdf' }
 });
 
@@ -27,7 +36,7 @@ function load() {
       if (p.mode === 'site' || p.mode === 'file') d.mode = p.mode;
       if (typeof p.url === 'string' && normalizeUrl(p.url)) d.url = p.url;
       if (p.display === 'frame' || p.display === 'popup') d.display = p.display;
-      if (p.keys && typeof p.keys === 'object') for (const k of Object.keys(d.keys)) if (typeof p.keys[k] === 'boolean') d.keys[k] = p.keys[k];
+      if (Array.isArray(p.binds)) d.binds = p.binds.filter(validBind).slice(0, 12);
       if (p.file && typeof p.file.name === 'string' && (p.file.kind === 'html' || p.file.kind === 'pdf')) d.file = { name: p.file.name, kind: p.file.kind };
     }
   } catch {
@@ -39,19 +48,37 @@ function load() {
 export const qs = reactive({
   ...load(),
   open: false, // the page is showing right now
-  armed: false, // a game page is on screen: hotkeys work and the page is preloaded
+  armed: false, // the app is running: hotkeys work on every page and the page is preloaded
   blobUrl: '', // object URL of the chosen local file
   popupBlocked: false,
+  capturing: false, // the settings page is waiting for the next key / button press
 });
 
 function save() {
   try {
-    storage?.setItem(KEY, JSON.stringify({ enabled: qs.enabled, mode: qs.mode, url: qs.url, display: qs.display, keys: qs.keys, file: qs.file }));
+    storage?.setItem(KEY, JSON.stringify({ enabled: qs.enabled, mode: qs.mode, url: qs.url, display: qs.display, binds: qs.binds, file: qs.file }));
   } catch {
     // storage blocked: the settings last for this visit only
   }
 }
 export const saveSettings = save;
+
+function validBind(b) {
+  if (!b || typeof b.label !== 'string') return false;
+  if (b.t === 'k') return typeof b.code === 'string' && typeof b.key === 'string';
+  return b.t === 'm' && Number.isInteger(b.button) && b.button >= 1 && b.button <= 4 && b.button !== 2;
+}
+const sameBind = (a, b) => a.t === b.t && (a.t === 'm' ? a.button === b.button : a.code === b.code && a.key === b.key);
+const KEY_NAMES = { ' ': 'Space', ArrowUp: 'Up arrow', ArrowDown: 'Down arrow', ArrowLeft: 'Left arrow', ArrowRight: 'Right arrow' };
+const MOUSE_NAMES = { 1: 'middle mouse button', 3: 'mouse back button', 4: 'mouse forward button' };
+
+// does this event press one of the chosen hotkeys? (plain keys only: no Ctrl / Alt / Meta / Shift)
+function matchKey(e) {
+  if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return false;
+  return qs.binds.some((b) => b.t === 'k' && ((b.code && e.code === b.code) || (!e.code && e.key === b.key)));
+}
+const matchMouse = (e) => qs.binds.some((b) => b.t === 'm' && b.button === e.button);
+const hasMouseBinds = () => qs.binds.some((b) => b.t === 'm');
 
 // "chat.deepseek.com" -> "https://chat.deepseek.com/"; only http(s) addresses are allowed
 export function normalizeUrl(raw) {
@@ -95,14 +122,15 @@ async function idb(mode, fn) {
 }
 
 // the relay lets the hotkeys work while a local .html page has the focus (a website in a frame cannot do that)
-const RELAY = `<script>(function(){function t(k){try{parent.postMessage({qs:'toggle',k:k},'*')}catch(e){}}
-addEventListener('keydown',function(e){if(e.ctrlKey||e.altKey||e.metaKey||e.shiftKey)return;var k=e.code==='Tab'||e.key==='Tab'?'tab':e.code==='Backquote'||e.key==='\x60'?'backquote':'';if(!k)return;e.preventDefault();e.stopPropagation();if(!e.repeat)t(k)},true);
-['mousedown','mouseup','auxclick'].forEach(function(n){addEventListener(n,function(e){if(e.button!==3&&e.button!==4)return;e.preventDefault();e.stopPropagation();if(n==='mousedown')t('mouse')},true)});
+const relay = (binds) => `<script>(function(){var B=${JSON.stringify(binds).replace(/</g, '\\u003c')};function t(){try{parent.postMessage({qs:'toggle'},'*')}catch(e){}}
+addEventListener('keydown',function(e){if(e.ctrlKey||e.altKey||e.metaKey||e.shiftKey)return;var hit=B.some(function(b){return b.t==='k'&&((b.code&&e.code===b.code)||(!e.code&&e.key===b.key))});if(!hit)return;e.preventDefault();e.stopPropagation();if(!e.repeat)t()},true);
+['mousedown','mouseup','auxclick'].forEach(function(n){addEventListener(n,function(e){if(!B.some(function(b){return b.t==='m'&&b.button===e.button}))return;e.preventDefault();e.stopPropagation();if(n==='mousedown')t()},true)});
 })();<\/script>`;
 
 async function buildUrl(blob, kind) {
   if (kind === 'pdf') return URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
   const text = await blob.text();
+  const RELAY = relay(qs.binds);
   const html = /<\/body\s*>/i.test(text) ? text.replace(/<\/body\s*>/i, () => `${RELAY}</body>`) : text + RELAY;
   return URL.createObjectURL(new Blob([html], { type: 'text/html' }));
 }
@@ -223,19 +251,17 @@ export function toggleQuick() {
   });
 }
 
-// ---- hotkeys (only while a game page is showing) ----
+// ---- hotkeys (every page) ----
 let sideBtnAt = 0;
 let sideBtn = 0;
 function onKeyDown(e) {
-  if (!qs.armed || !qs.enabled || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
-  const k = e.code === 'Tab' || e.key === 'Tab' ? 'tab' : e.code === 'Backquote' || e.key === '`' ? 'backquote' : '';
-  if (!k || !qs.keys[k]) return;
+  if (!qs.armed || !qs.enabled || qs.capturing || !matchKey(e)) return;
   e.preventDefault();
   e.stopPropagation();
   if (!e.repeat) toggleQuick();
 }
 function onMouse(e) {
-  if (!qs.armed || !qs.enabled || (e.button !== 3 && e.button !== 4) || !qs.keys.mouse) return;
+  if (!qs.armed || !qs.enabled || qs.capturing || !matchMouse(e)) return;
   sideBtnAt = performance.now();
   sideBtn = e.button;
   e.preventDefault();
@@ -244,14 +270,14 @@ function onMouse(e) {
 }
 // some browsers still navigate on the side buttons; take that step right back
 function onPopState() {
-  if (!qs.armed || !qs.keys.mouse || performance.now() - sideBtnAt > 700) return;
+  if (!qs.armed || !hasMouseBinds() || performance.now() - sideBtnAt > 700) return;
   sideBtnAt = 0;
   history.go(sideBtn === 3 ? 1 : -1);
 }
 function onMessage(e) {
   if (!qs.armed || !frameEl || e.source !== frameEl.contentWindow) return;
   const d = e.data;
-  if (d && d.qs === 'toggle' && qs.keys[d.k]) toggleQuick();
+  if (d && d.qs === 'toggle') toggleQuick();
 }
 function onWindowFocus() {
   // coming back from the pop-up window
@@ -271,7 +297,73 @@ function install() {
   window.addEventListener('focus', onWindowFocus);
 }
 
-// a game page calls this on mount (true) and unmount (false)
+// ---- choosing the hotkeys ----
+let stopCapture;
+// waits for the next key press or mouse button (not left / right click); Escape cancels. Resolves with the binding or undefined.
+export function captureBind() {
+  stopCapture?.();
+  qs.capturing = true;
+  return new Promise((resolve) => {
+    const done = (b) => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('mousedown', onMouseDown, true);
+      for (const n of ['mouseup', 'pointerup', 'pointerdown', 'auxclick', 'click']) window.removeEventListener(n, swallow, true);
+      stopCapture = undefined;
+      // let the matching release / click events pass before the normal hotkeys come back
+      setTimeout(() => (qs.capturing = false), 350);
+      resolve(b);
+    };
+    const swallow = (e) => {
+      if (e.button === 0 || e.button === 2) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    const onKey = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock', 'Dead', 'Process'].includes(e.key)) return;
+      if (e.key === 'Escape') return done(undefined);
+      if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return; // plain keys only: wait for a modifier-free press
+      done({ t: 'k', code: e.code || '', key: e.key, label: KEY_NAMES[e.key] ?? (e.key.length === 1 ? e.key.toUpperCase() : e.key) });
+    };
+    const onMouseDown = (e) => {
+      if (e.button === 0 || e.button === 2) return; // left and right clicks stay normal
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.button < 1 || e.button > 4) return;
+      done({ t: 'm', button: e.button, label: MOUSE_NAMES[e.button] });
+    };
+    stopCapture = () => done(undefined);
+    window.addEventListener('keydown', onKey, { capture: true, passive: false });
+    window.addEventListener('mousedown', onMouseDown, { capture: true, passive: false });
+    for (const n of ['mouseup', 'pointerup', 'pointerdown', 'auxclick', 'click']) window.addEventListener(n, swallow, { capture: true, passive: false });
+  });
+}
+export function cancelCapture() {
+  stopCapture?.();
+}
+// returns an error text, or undefined when added
+export function addBind(b) {
+  if (qs.binds.some((x) => sameBind(x, b))) return 'that one is already in the list';
+  if (qs.binds.length >= 12) return 'that is plenty of hotkeys already';
+  qs.binds.push(b);
+  saveSettings();
+  void showStoredFile();
+  return undefined;
+}
+export function removeBind(i) {
+  qs.binds.splice(i, 1);
+  saveSettings();
+  void showStoredFile();
+}
+export function resetBinds() {
+  qs.binds = defaultBinds();
+  saveSettings();
+  void showStoredFile();
+}
+
+// the app calls this once: the hotkeys work on every page
+// (kept as a function so it can be switched off again)
 export function setArmed(on) {
   if (on) install();
   qs.armed = on;
