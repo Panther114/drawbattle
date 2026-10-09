@@ -91,7 +91,7 @@ function fireConfetti(angle) {
 {
   const roundsTotal = props.game.previousRounds
     .map((r) => roundScores(r))
-    .reduce((a, b) => a.map((x, i) => x + b[i]));
+    .reduce((a, b) => a.map((x, i) => x + b[i]), props.game.teams.map(() => 0));
   const before = hasFinal.value ? roundsTotal : roundsTotal.map(() => 0);
   const gained = hasFinal.value ? finalRoundScores(finalRound.value) : roundsTotal;
   shownScores.value = before;
@@ -160,6 +160,9 @@ const why = (r) => {
 <template>
   <div class="sm-root">
     <div class="sm-page-header">final scores</div>
+    <div v-if="game.endedEarly" class="sm-early">
+      {{ game.endedEarly === 'vote' ? 'the game was ended early by vote' : 'the game ended because everyone left' }}
+    </div>
     <div class="sm-header-line" />
     <div class="sm-team-columns">
       <div v-for="(team, i) in game.teams" :key="i" class="sm-team-column">
@@ -196,7 +199,8 @@ const why = (r) => {
     <Transition enter-from-class="sm-fade-enter-from" enter-active-class="sm-fade-enter-active">
       <div v-if="stage >= Stage.Recap" class="sm-recap">
         <Btn v-if="showBackToLobby" class="sm-back-button" icon="back" @click="backToLobby">back to lobby</Btn>
-        <div class="sm-recap-header">
+        <div v-if="recapWords.length === 0" class="sm-no-rounds">no round was played</div>
+        <div v-if="recapWords.length > 0" class="sm-recap-header">
           <div class="sm-recap-label">game recap</div>
           <div class="sm-word-select-row">
             <button type="button" class="sm-word-arrow prev" aria-label="previous word" :disabled="wordIndex <= 0" @click="wordIndex = Math.max(wordIndex - 1, 0)" />
@@ -219,7 +223,7 @@ const why = (r) => {
             <input id="showGuesses" type="checkbox" :checked="showGuesses" @change="toggleGuesses" />
           </div>
         </div>
-        <div :key="wordIndex" class="sm-team-boards">
+        <div v-if="recapWords.length > 0" :key="wordIndex" class="sm-team-boards">
           <div v-for="([roundIdx, original, redo], teamIdx) in recapFor(wordIndex)" :key="teamIdx" class="sm-team-board-column">
             <TeamBoard
               class="sm-team-board"

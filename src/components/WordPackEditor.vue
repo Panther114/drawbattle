@@ -8,9 +8,10 @@ import {
   localPacks,
   parseFiles,
   savePacks,
+  sharePack,
   uploadPack,
 } from '../localpacks.js';
-import { fetchOfficialWords } from '../wordpacks.js';
+import { fetchOfficialWords, loadGlobalPacks } from '../wordpacks.js';
 import { safeStorage } from '../storage.js';
 import Btn from './Btn.vue';
 
@@ -188,6 +189,22 @@ async function useInGame() {
     busy.value = false;
   }
 }
+async function shareWithEveryone() {
+  const p = selected.value;
+  if (!p) return;
+  commit();
+  if (!window.confirm(`share "${p.name}" with everyone? it will show up under "community" for every player.`)) return;
+  busy.value = true;
+  try {
+    const meta = await sharePack(p);
+    loadGlobalPacks();
+    say(`"${meta.name}" is now shared with everyone (word pack id ${meta.id})`);
+  } catch (e) {
+    say(e.message, 'error');
+  } finally {
+    busy.value = false;
+  }
+}
 async function shareId() {
   const p = selected.value;
   if (!p) return;
@@ -309,6 +326,14 @@ async function shareId() {
             use in this game
           </Btn>
           <button class="pe-link" :disabled="busy || wordCount < 4" @click="shareId">get a shareable id</button>
+          <button
+            class="pe-link"
+            :disabled="busy || wordCount < 10"
+            :title="wordCount < 10 ? 'a shared pack needs at least 10 words' : 'list this pack for every player'"
+            @click="shareWithEveryone"
+          >
+            share with everyone
+          </button>
         </div>
       </template>
 

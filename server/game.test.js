@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Game, C, S, Status, sanitizeRating, sanitizeName, voteThreshold, isStale, IDLE_MS, EMPTY_MS, LIVE_IDLE_MS } from './game.js';
+import { addCustomPack, shareGlobal, globalListJson, getWordListMeta } from './wordpacks.js';
 
 // ---- helpers ----
 class MockWs {
@@ -523,7 +524,12 @@ test('chat is global, capped and stored for newcomers', () => {
   g.connect(spec, { userId: 's', spectate: true });
   assert.equal(spec.last(S.SessionStart)[1].chat.length, 2);
   send(g, spec, C.Chat, 'hi');
-  assert.equal(g.chat.length, 2, 'spectators can read but not write');
+  assert.equal(g.chat.length, 3, 'spectators can chat too');
+  const sm = g.chat.at(-1);
+  assert.equal(sm.spec, true);
+  assert.equal(sm.userId, undefined, 'a spectator message never carries a user id');
+  send(g, spec, C.StartGame);
+  assert.equal(g.started, false, 'but spectators cannot do anything else');
 });
 
 test('chat is rate limited and history is bounded', () => {
@@ -711,4 +717,136 @@ test('random teams: vote kick in the lobby only needs 5+ players in total', () =
   assert.ok(g.canLoseMember(0));
   ws.p5.close();
   assert.equal(g.canLoseMember(0), false);
+});
+
+// ---- ending the game early ----
+function playing(n = 4, settings = {}) {
+  const g = makeGame({ numRounds: 3, ...settings });
+  const ws = lobby(g, n);
+  startGame(g, ws);
+  toDrawing(g);
+  return { g, ws };
+}
+
+test('more than half of the active players can end the game, and the score is worked out right away', () => {
+  const { g, ws } = playing(4);
+  const r = g.currentRound;
+  const guesser = ids(g, 0).find((id) => id !== r.teamStates[0].drawerId);
+  send(g, ws[guesser], C.UserGuess, 0, r.word);
+  send(g, ws.p1, C.VoteEnd);
+  send(g, ws.p2, C.VoteEnd);
+  assert.equal(g.finished, false, '2 of 4 is not more than half');
+  assert.deepEqual(ws.p3.last(S.EndVotes)[1].sort(), ['p1', 'p2']);
+  send(g, ws.p2, C.VoteEnd); // withdraw
+  send(g, ws.p2, C.VoteEnd);
+  send(g, ws.p3, C.VoteEnd);
+  assert.equal(g.finished, true);
+  assert.equal(g.ended, true);
+  assert.equal(g.endedEarly, 'vote');
+  assert.equal(g.currentRound, undefined);
+  assert.equal(g.previousRounds.length, 1, 'the round in progress counts as it stands');
+  assert.equal(g.previousRounds[0].word, r.word);
+  assert.deepEqual(ws.p4.last(S.GameEnded).slice(1), [true, 'vote']);
+  assert.equal(g.snapshot('none').endedEarly, 'vote');
+  assert.equal(g.lobbyInfo().stage, 'ended');
+});
+
+test('a vote to end needs a started game, a player on a team, and does nothing for spectators', () => {
+  const g = makeGame({ numRounds: 3 });
+  const ws = lobby(g, 4);
+  send(g, ws.p1, C.VoteEnd);
+  assert.equal(g.endVotes.size, 0, 'nothing to end in the lobby');
+  startGame(g, ws);
+  assert.equal(g.inCountdown, true);
+  send(g, ws.p1, C.VoteEnd);
+  assert.equal(g.endVotes.size, 0, 'not during the start countdown');
+  toDrawing(g);
+  const spec = new MockWs(g);
+  g.connect(spec, { userId: 's', spectate: true });
+  send(g, spec, C.VoteEnd);
+  assert.equal(g.endVotes.size, 0);
+});
+
+test('ending the game before a word was chosen leaves out that round; it can end before any round was scored', () => {
+  const g = makeGame({ numRounds: 3 });
+  const ws = lobby(g, 4);
+  startGame(g, ws);
+  g.currentRound.startTime = g.now() - 1000;
+  for (const id of ['p1', 'p2', 'p3']) send(g, ws[id], C.VoteEnd);
+  assert.equal(g.finished, true);
+  assert.equal(g.previousRounds.length, 0);
+  assert.equal(g.currentRound, undefined);
+  assert.equal(ws.p1.last(S.GameEnded)[1], false);
+});
+
+test('ending the game during the final drawdown keeps the final round for the score', () => {
+  const { g, ws } = playing(4, { numRounds: 1 });
+  toScoreScreen(g);
+  g.advance();
+  assert.ok(g.finalRound);
+  for (const id of ['p1', 'p2', 'p3']) send(g, ws[id], C.VoteEnd);
+  assert.equal(g.ended, true);
+  assert.ok(g.finalRound);
+  assert.equal(g.previousRounds.length, 1);
+});
+
+test('the game ends and is scored when everybody has disconnected for a while', () => {
+  const { g, ws } = playing(4);
+  for (const id of ['p1', 'p2', 'p3']) ws[id].close();
+  assert.equal(g.finished, false);
+  ws.p4.close();
+  assert.ok(g.emptyTimer, 'a grace period starts');
+  g.emptyTimer._onTimeout();
+  assert.equal(g.finished, true);
+  assert.equal(g.endedEarly, 'empty');
+  assert.equal(g.previousRounds.length, 1);
+});
+
+test('somebody coming back within the grace period keeps the game going', () => {
+  const { g, ws } = playing(4);
+  for (const id of ['p1', 'p2', 'p3', 'p4']) ws[id].close();
+  assert.ok(g.emptyTimer);
+  join(g, 'p1');
+  assert.equal(g.emptyTimer, undefined);
+  assert.equal(g.finished, false);
+});
+
+// ---- joining a game in progress ----
+test('a late joiner picks their team when the lobby allows it', () => {
+  const { g } = playing(4, { lateJoinPickTeam: true });
+  const a = new MockWs(g);
+  g.connect(a, { userId: 'late1', userName: 'late1', team: 1 });
+  assert.ok(ids(g, 1).includes('late1'));
+  const b = new MockWs(g);
+  g.connect(b, { userId: 'late2', userName: 'late2', team: 1 });
+  assert.ok(ids(g, 1).includes('late2'), 'team choice beats balance');
+});
+
+test('without the pick-a-team option a late joiner goes to the smaller team', () => {
+  const { g } = playing(5);
+  const smaller = ids(g, 0).length < ids(g, 1).length ? 0 : 1;
+  const a = new MockWs(g);
+  g.connect(a, { userId: 'late1', userName: 'late1', team: 1 - smaller });
+  assert.ok(ids(g, smaller).includes('late1'));
+});
+
+test('joining mid-game can be switched off', () => {
+  const { g } = playing(4, { allowLateJoin: false });
+  const a = new MockWs(g);
+  g.connect(a, { userId: 'late1', userName: 'late1' });
+  assert.equal(a.last(S.ServerError)[1].reason, 'late');
+});
+
+// ---- shared (community) word packs ----
+test('a custom pack can be shared with everyone, within tight limits', () => {
+  const words = Array.from({ length: 12 }, (_, i) => `shareword${i}`);
+  const { meta } = addCustomPack({ name: 'shared test', words });
+  const out = shareGlobal(meta.id);
+  assert.equal(out.meta.id, meta.id);
+  assert.ok(JSON.parse(globalListJson()).some((p) => p.id === meta.id));
+  assert.equal(shareGlobal(meta.id).meta.id, meta.id, 'sharing twice is harmless');
+  const tiny = addCustomPack({ name: 'tiny', words: ['a', 'b', 'c', 'd'] }).meta;
+  assert.match(shareGlobal(tiny.id).error, /at least/);
+  assert.match(shareGlobal(110943).error, /not found/, 'the official pack is not a custom pack');
+  assert.ok(getWordListMeta(meta.id));
 });

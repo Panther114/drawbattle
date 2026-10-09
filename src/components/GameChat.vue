@@ -70,14 +70,14 @@ onMounted(scrollDown);
 
 function send() {
   const t = text.value.trim();
-  if (!t || props.isSpectator) return;
+  if (!t) return;
   emit('client-message', [C.Chat, t.slice(0, MAX_CHAT_LENGTH)]);
   text.value = '';
   pinned = true;
 }
 
 const teamOf = (id) => teams.value.findIndex((t) => t.userIds.includes(id));
-const nameOf = (m) => users.value[m.userId]?.name || m.name || 'anonymous';
+const nameOf = (m) => (m.spec ? m.name || '' : users.value[m.userId]?.name || m.name || 'anonymous');
 const teamClass = (m) => `t${teamOf(m.userId) >= 0 ? teamOf(m.userId) : (m.team ?? 0)}`;
 
 // ---- players tab: vote kick and team switch requests ----
@@ -182,7 +182,7 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
           <template v-for="m in messages" :key="m.id">
             <div v-if="m.sys" class="gc-sys">{{ m.text }}</div>
             <div v-else class="gc-msg" :class="{ mine: m.userId === userId }">
-              <span class="gc-name" :class="teamClass(m)">{{ nameOf(m) }}</span>
+              <span class="gc-name" :class="m.spec ? 'spec' : teamClass(m)"><span v-if="m.spec" class="gc-spec-tag">spectator</span>{{ nameOf(m) }}</span>
               <span class="gc-text">{{ m.text }}</span>
             </div>
           </template>
@@ -194,14 +194,13 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
             type="text"
             class="gc-input"
             :maxlength="MAX_CHAT_LENGTH"
-            :placeholder="isSpectator ? 'spectators can only read' : 'say something...'"
-            :disabled="isSpectator"
+            :placeholder="isSpectator ? 'chat as a spectator...' : 'say something...'"
             autocomplete="off"
             autocorrect="off"
             spellcheck="false"
             aria-label="chat message"
           />
-          <button type="submit" class="gc-send" :disabled="isSpectator || text.trim() === ''" aria-label="send message">
+          <button type="submit" class="gc-send" :disabled="text.trim() === ''" aria-label="send message">
             <Icon name="send" />
           </button>
         </form>

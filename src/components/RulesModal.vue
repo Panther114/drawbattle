@@ -1,6 +1,7 @@
 <script setup>
 import { computed, reactive } from 'vue';
-import { DEFAULT_RULES } from '../shared.js';
+import { DEFAULT_RULES, LOBBY_RULES } from '../shared.js';
+import { safeStorage } from '../storage.js';
 import Modal from './Modal.vue';
 
 const props = defineProps({
@@ -33,7 +34,6 @@ const GROUPS = [
       num('finalBonusPoints', 'final round: finishing bonus', 0, 10000, 'pts'),
       num('headStartBase', 'head start after 2 wins in a row', 0, 30, 'sec', 'off'),
       num('headStartStep', 'extra head start per extra win', 0, 10, 'sec'),
-      { key: 'alwaysRotate', label: 'drawers always rotate (winner does not stay)', bool: true },
     ],
   },
   {
@@ -67,7 +67,7 @@ const GROUPS = [
     items: [
       num('maxTeamSize', 'max players per team', 2, 8),
       { key: 'allowSpectators', label: 'allow spectators', bool: true },
-      { key: 'allowLateJoin', label: 'allow joining after the game starts', bool: true },
+      { key: 'streamerMode', label: 'streamer mode (hides the game code)', bool: true },
     ],
   },
 ];
@@ -84,19 +84,24 @@ const PRESETS = {
   },
   chaos: {
     label: 'chaos',
-    values: { wordChoiceCount: 4, palette: 'mono', allowEraser: false, allowClear: false, alwaysRotate: true, pointsWin: 500, pointsCorrect: 0, headStartBase: 0 },
+    values: { wordChoiceCount: 4, palette: 'mono', allowEraser: false, allowClear: false, pointsWin: 500, pointsCorrect: 0, headStartBase: 0 },
   },
 };
 
 // local copy so quick successive changes do not overwrite each other before the server echoes
-const local = reactive({});
-for (const k of Object.keys(DEFAULT_RULES)) {
+// (the rules that live in the lobby settings itself are not touched here)
+const RULE_KEYS = Object.keys(DEFAULT_RULES).filter((k) => !LOBBY_RULES.includes(k));
+const DEFAULTS = Object.fromEntries(RULE_KEYS.map((k) => [k, DEFAULT_RULES[k]]));
+const storage = safeStorage('local');
+const local = reactive({ streamerMode: props.gameSettings.streamerMode === true });
+for (const k of RULE_KEYS) {
   const v = props.gameSettings[k];
   local[k] = typeof v === typeof DEFAULT_RULES[k] ? v : DEFAULT_RULES[k];
 }
-const changed = computed(() => Object.keys(DEFAULT_RULES).filter((k) => local[k] !== DEFAULT_RULES[k]).length);
+const changed = computed(() => RULE_KEYS.filter((k) => local[k] !== DEFAULT_RULES[k]).length);
 
 function push() {
+  storage?.setItem('streamerMode', local.streamerMode ? '1' : '0');
   emit('update', { ...props.gameSettings, ...local });
 }
 function set(key, value) {
@@ -104,7 +109,7 @@ function set(key, value) {
   push();
 }
 function applyPreset(p) {
-  Object.assign(local, DEFAULT_RULES, p.values);
+  Object.assign(local, DEFAULTS, p.values);
   push();
 }
 function selectFrom(e, item) {

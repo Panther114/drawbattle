@@ -26,6 +26,8 @@ export const S = {
   SwitchAppeals: 24,
   GameOver: 25,
   Presence: 26,
+  GameEnded: 27,
+  EndVotes: 28,
   ServerError: 300,
   ForceRefresh: 301,
 };
@@ -48,6 +50,7 @@ export const C = {
   SwitchAppeal: 114,
   SwitchVote: 115,
   Presence: 116,
+  VoteEnd: 117,
 };
 
 export const Status = { Connected: 1, Disconnected: 2, Kicked: 3 };
@@ -67,6 +70,7 @@ export const DEFAULT_RULES = {
   alwaysRotate: false,
   allowSpectators: true,
   allowLateJoin: true,
+  lateJoinPickTeam: false,
   singleWordsOnly: false,
   maxWordLength: 0,
   finalDrawdown: true,
@@ -106,6 +110,7 @@ const MIN_RANDOM_PLAYERS = 4; // random teams need 2 + 2
 const PRESENCE_BURST = 8; // presence changes allowed per PRESENCE_WINDOW_MS per player
 const PRESENCE_WINDOW_MS = 10000;
 const MAX_RATING = 99999;
+export const EMPTY_END_MS = 15 * 1000; // a started game nobody is connected to for this long is ended and scored
 
 // the score a client reports about itself (it is stored on the player's own device); anything odd counts as 0
 export function sanitizeRating(raw) {
@@ -250,6 +255,7 @@ export class Game {
     this.createdAt = Date.now();
     this.lastActivity = Date.now();
     this.finished = false;
+    this.endedEarly = undefined; // 'vote' | 'empty' when the game was stopped before its natural end
     this.ended = false; // true once the game is over without a final drawdown
     this.endedAt = undefined;
     this.chat = [];
@@ -260,6 +266,8 @@ export class Game {
     this.banned = new Set(); // vote-kicked user ids
     this.kickVotes = new Map(); // targetId -> Set<voterId>
     this.switchAppeals = new Map(); // appellantId -> Set<voterId>
+    this.endVotes = new Set(); // voter ids: more than half of the active players ends the game early
+    this.emptyTimer = undefined;
     this.chooserTimer = undefined;
     this.chosenByTeam = -1;
     this.availableWords = [];
@@ -339,8 +347,10 @@ export class Game {
       createdAt: this.createdAt,
       kickVotes: mapOfSets(this.kickVotes),
       switchAppeals: mapOfSets(this.switchAppeals),
+      endVotes: [...this.endVotes],
     };
     if (this.ended) out.ended = true;
+    if (this.endedEarly) out.endedEarly = this.endedEarly;
     if (withChat) out.chat = this.chat;
     if (this.currentRound) out.currentRound = stripRound(this.currentRound, includeCanvas !== 'none');
     if (this.finalRound) {
@@ -405,7 +415,7 @@ export class Game {
   }
 
   // ---------- connections ----------
-  connect(ws, { userId, userName, spectate, rating }) {
+  connect(ws, { userId, userName, spectate, rating, team }) {
     this.touch();
     ws.gameCtx = { userId, spectate: !!spectate };
     if (spectate && !this.rule('allowSpectators')) {
@@ -414,6 +424,7 @@ export class Game {
       return;
     }
     if (spectate) {
+      ws.gameCtx.name = typeof userName === 'string' ? sanitizeName(userName) : '';
       this.spectators.add(ws);
       this.send(ws, [S.SessionStart, this.snapshot('current', true), this.now()]);
       if (this.started) this.send(ws, [S.ReadyUp, this.previousRounds.length, [...this.ready]]);
@@ -458,6 +469,18 @@ export class Game {
     this.users[userId] = user;
     let ti = this.teams[0].userIds.length <= this.teams[1].userIds.length ? 0 : 1;
     if (this.teams[ti].userIds.length >= this.rule('maxTeamSize')) ti = 1 - ti;
+    // joining a game in progress: the player may pick the team when the lobby allows it
+    const wanted = Number(team);
+    if (
+      this.started &&
+      this.rule('lateJoinPickTeam') &&
+      Number.isInteger(wanted) &&
+      wanted >= 0 &&
+      wanted < this.teams.length &&
+      this.teams[wanted].userIds.length < this.rule('maxTeamSize')
+    ) {
+      ti = wanted;
+    }
     this.teams[ti].userIds.push(userId);
     this.addSocket(userId, ws);
     this.broadcast([S.JoinGame, user, this.teams], ws);
@@ -467,6 +490,7 @@ export class Game {
   }
 
   addSocket(userId, ws) {
+    this.clearEmptyTimer();
     let set = this.sockets.get(userId);
     if (!set) {
       set = new Set();
@@ -499,7 +523,22 @@ export class Game {
       this.broadcast([S.UserDisconnect, ctx.userId]);
       this.recheckVotes();
       this.maybeAdvance();
+      this.watchEmpty();
     }
+  }
+
+  // everybody left a game in progress: after a short grace period (page refreshes, wifi blips) it is ended and scored
+  watchEmpty() {
+    if (this.finished || this.emptyTimer || this.activeCount > 0 || this.inCountdown || !this.started) return;
+    this.emptyTimer = setTimeout(() => {
+      this.emptyTimer = undefined;
+      if (this.activeCount === 0 && !this.inCountdown) this.endEarly('empty');
+    }, EMPTY_END_MS);
+    this.emptyTimer.unref?.();
+  }
+  clearEmptyTimer() {
+    if (this.emptyTimer) clearTimeout(this.emptyTimer);
+    this.emptyTimer = undefined;
   }
 
   removeFromLobby(userId) {
@@ -521,7 +560,12 @@ export class Game {
     }
     if (!Array.isArray(msg)) return;
     const ctx = ws.gameCtx;
-    if (!ctx || ctx.spectate) return;
+    if (!ctx) return;
+    if (ctx.spectate) {
+      // spectators may only talk
+      if (msg[0] === C.Chat) this.onChat(ws, undefined, msg[1]);
+      return;
+    }
     const userId = ctx.userId;
     if (!this.users[userId] || this.users[userId].status === Status.Kicked) return;
     switch (msg[0]) {
@@ -555,6 +599,8 @@ export class Game {
         return this.onSwitchVote(userId, msg[1]);
       case C.Presence:
         return this.onPresence(userId, msg[1]);
+      case C.VoteEnd:
+        return this.onVoteEnd(userId);
       default:
         return;
     }
@@ -634,11 +680,15 @@ export class Game {
       .join('');
     if (!body) return;
     const now = Date.now();
-    const recent = (this.chatLog.get(userId) || []).filter((t) => now - t < CHAT_WINDOW_MS);
-    this.chatLog.set(userId, recent);
+    // spectators have no player record: their rate limit lives on the socket and their messages carry no user id
+    const spectator = userId === undefined;
+    const recent = ((spectator ? ws.chatTimes : this.chatLog.get(userId)) || []).filter((t) => now - t < CHAT_WINDOW_MS);
+    if (spectator) ws.chatTimes = recent;
+    else this.chatLog.set(userId, recent);
     if (recent.length >= CHAT_BURST) return this.chatNotice(ws, 'slow down a little!');
     if (this.chatSpoils(body)) return this.chatNotice(ws, "don't give away the word!");
     recent.push(now);
+    if (spectator) return this.addChat({ spec: true, name: (ws.gameCtx && ws.gameCtx.name) || '', text: body });
     const user = this.users[userId];
     this.addChat({ userId, name: user.name, team: this.teamIndexOf(userId), text: body });
   }
@@ -655,6 +705,7 @@ export class Game {
   dropVotesOf(userId) {
     this.kickVotes.delete(userId);
     this.switchAppeals.delete(userId);
+    this.endVotes.delete(userId);
     for (const [k, set] of this.kickVotes) {
       set.delete(userId);
       if (set.size === 0) this.kickVotes.delete(k);
@@ -793,6 +844,52 @@ export class Game {
         this.broadcast([S.DrawerRotated, [idx], ti, states[idx].drawerId]);
       }
     }
+  }
+
+  // ---------- ending the game early ----------
+  // a game in progress can be ended by more than half of the active players; the score is worked out right away
+  canVoteEnd() {
+    return this.started && !this.finished && !this.inCountdown;
+  }
+  endVotesPass() {
+    const voters = this.activePlayers();
+    return voters.length >= 1 && voters.filter((v) => this.endVotes.has(v)).length >= voteThreshold(voters.length);
+  }
+  onVoteEnd(userId) {
+    if (!this.canVoteEnd()) return;
+    const user = this.users[userId];
+    if (this.teamIndexOf(userId) < 0 || !user || user.status !== Status.Connected) return;
+    const first = this.endVotes.size === 0;
+    if (this.endVotes.has(userId)) this.endVotes.delete(userId);
+    else this.endVotes.add(userId);
+    this.broadcast([S.EndVotes, [...this.endVotes]]);
+    if (this.endVotesPass()) return this.endEarly('vote');
+    if (first && this.endVotes.has(userId)) this.systemChat(`${user.name || 'anonymous'} wants to end the game`);
+  }
+
+  // stops the game right now: the round in progress counts as it stands (if its word was already chosen)
+  endEarly(reason = 'vote') {
+    if (this.finished || !this.started) return;
+    this.endedEarly = reason;
+    this.clearChooserTimer();
+    this.clearEmptyTimer();
+    this.switchAppeals.clear();
+    const round = this.currentRound;
+    let kept = false;
+    if (round) {
+      if (round.word !== undefined) {
+        this.previousRounds.push(round);
+        kept = true;
+      }
+      this.currentRound = undefined;
+    }
+    this.ended = true;
+    this.endVotes.clear();
+    this.ready = new Set();
+    this.broadcast([S.GameEnded, kept, reason]);
+    this.broadcast([S.EndVotes, []]);
+    this.broadcast([S.SwitchAppeals, {}]);
+    this.finishGame();
   }
 
   // ---------- team switch appeals (between rounds only) ----------
@@ -1236,6 +1333,7 @@ export class Game {
   // ---------- housekeeping ----------
   destroy() {
     this.clearChooserTimer();
+    this.clearEmptyTimer();
     for (const t of this.lobbyTimers.values()) clearTimeout(t);
     for (const set of this.sockets.values()) set.forEach((ws) => ws.close(1000));
     this.spectators.forEach((ws) => ws.close(1000));

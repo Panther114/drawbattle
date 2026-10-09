@@ -3,11 +3,10 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { C } from '../shared.js';
 import { DEFAULT_WORD_LIST_ID, isStandardPack, loadPack, packs } from '../wordpacks.js';
 import { track } from '../analytics.js';
-import { safeStorage } from '../storage.js';
 import WordListSelectorItem from './WordListSelectorItem.vue';
 import WordListSelectorModal from './WordListSelectorModal.vue';
 import RulesModal from './RulesModal.vue';
-import { DEFAULT_RULES } from '../shared.js';
+import { DEFAULT_RULES, LOBBY_RULES } from '../shared.js';
 
 const props = defineProps({
   gameId: { type: String, required: true },
@@ -19,7 +18,6 @@ const emit = defineEmits(['client-message']);
 const MAX_ROUNDS = 200;
 const MAX_ROUND_LENGTH = 600;
 
-const storage = safeStorage('local');
 const numRounds = ref(props.gameSettings.numRounds);
 const roundLengthSec = ref(props.gameSettings.roundLengthSec);
 const initialPack = props.gameSettings.wordListId;
@@ -31,8 +29,14 @@ const randomTeams = ref(props.gameSettings.randomTeams === true);
 const copied = ref(false);
 const modalOpen = ref(false);
 const rulesOpen = ref(false);
+const alwaysRotate = ref(props.gameSettings.alwaysRotate === true);
+const allowLateJoin = ref(props.gameSettings.allowLateJoin !== false);
+const lateJoinPickTeam = ref(props.gameSettings.lateJoinPickTeam === true);
 const changedRules = computed(
-  () => Object.keys(DEFAULT_RULES).filter((k) => props.gameSettings[k] !== undefined && props.gameSettings[k] !== DEFAULT_RULES[k]).length,
+  () =>
+    Object.keys(DEFAULT_RULES).filter(
+      (k) => !LOBBY_RULES.includes(k) && props.gameSettings[k] !== undefined && props.gameSettings[k] !== DEFAULT_RULES[k],
+    ).length + (streamerMode.value ? 1 : 0),
 );
 // a non-standard pack that was picked stays pinned at the top of the pack list
 const customPack = ref(isStandardPack(initialPack) ? undefined : initialPack);
@@ -58,6 +62,9 @@ const current = () => ({
   streamerMode: streamerMode.value,
   finalDrawdown: finalDrawdown.value,
   randomTeams: randomTeams.value,
+  alwaysRotate: alwaysRotate.value,
+  allowLateJoin: allowLateJoin.value,
+  lateJoinPickTeam: lateJoinPickTeam.value,
 });
 
 function changeRounds(e) {
@@ -98,12 +105,23 @@ function changeRandom(e) {
   randomTeams.value = v;
   send({ ...current(), randomTeams: v });
 }
-function changeStreamer(e) {
+function changeRotate(e) {
   const v = e.target.checked;
-  track('change game setting', { 'game id': props.gameId, key: 'streamerMode', value: v });
-  streamerMode.value = v;
-  storage?.setItem('streamerMode', v ? '1' : '0');
-  send({ ...current(), streamerMode: v });
+  track('change game setting', { 'game id': props.gameId, key: 'alwaysRotate', value: v });
+  alwaysRotate.value = v;
+  send({ ...current(), alwaysRotate: v });
+}
+function changeLateJoin(e) {
+  const v = e.target.checked;
+  track('change game setting', { 'game id': props.gameId, key: 'allowLateJoin', value: v });
+  allowLateJoin.value = v;
+  send({ ...current(), allowLateJoin: v });
+}
+function changePickTeam(e) {
+  const v = e.target.checked;
+  track('change game setting', { 'game id': props.gameId, key: 'lateJoinPickTeam', value: v });
+  lateJoinPickTeam.value = v;
+  send({ ...current(), lateJoinPickTeam: v });
 }
 
 async function copyLink() {
@@ -143,6 +161,9 @@ watch(
     streamerMode.value = s.streamerMode;
     finalDrawdown.value = s.finalDrawdown !== false;
     randomTeams.value = s.randomTeams === true;
+    alwaysRotate.value = s.alwaysRotate === true;
+    allowLateJoin.value = s.allowLateJoin !== false;
+    lateJoinPickTeam.value = s.lateJoinPickTeam === true;
   },
 );
 // keep the round count legal whenever the pack changes
@@ -265,23 +286,26 @@ const listIds = computed(() => {
             <input id="randomTeams" type="checkbox" :checked="randomTeams" :disabled="disabled" @change="changeRandom" />
           </div>
           <div class="st-item">
-            <button class="st-rules-button" @click="rulesOpen = true">customize rules...</button>
-            <span v-if="changedRules > 0" class="st-rules-changed">{{ changedRules }} changed</span>
+            <label for="alwaysRotate" class="st-checkbox-label">drawers always rotate</label>
+            <input id="alwaysRotate" type="checkbox" :checked="alwaysRotate" :disabled="disabled" @change="changeRotate" />
           </div>
           <div class="st-item">
-            <label for="streamerMode" class="st-checkbox-label">
-              streamer mode
-              <div v-tooltip="{ content: 'this will hide the <nobr>game code</nobr>' }" class="st-question">
-                (<span class="st-question-mark">?</span>)
-              </div>
-            </label>
+            <label for="allowLateJoin" class="st-checkbox-label">allow joining mid-game</label>
+            <input id="allowLateJoin" type="checkbox" :checked="allowLateJoin" :disabled="disabled" @change="changeLateJoin" />
+          </div>
+          <div v-if="allowLateJoin" class="st-item">
+            <label for="lateJoinPickTeam" class="st-checkbox-label">late joiners pick their team</label>
             <input
-              id="streamerMode"
+              id="lateJoinPickTeam"
               type="checkbox"
-              :checked="streamerMode"
+              :checked="lateJoinPickTeam"
               :disabled="disabled"
-              @change="changeStreamer"
+              @change="changePickTeam"
             />
+          </div>
+          <div class="st-item">
+            <button class="st-rules-button" @click="rulesOpen = true">customize rules...</button>
+            <span v-if="changedRules > 0" class="st-rules-changed">{{ changedRules }} changed</span>
           </div>
         </div>
       </div>

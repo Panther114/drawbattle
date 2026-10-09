@@ -8,6 +8,7 @@ export const DEFAULT_WORD_LIST_ID = 110943;
 // id -> metadata ({ id, name, numWords, sampleWords, description? })
 export const packs = reactive({});
 export const officialIds = ref([]);
+export const globalIds = ref([]); // packs shared with everybody
 const inflight = {};
 
 export async function loadOfficialPacks() {
@@ -21,6 +22,21 @@ export async function loadOfficialPacks() {
     officialIds.value = list.map((p) => p.id);
   } catch {
     // offline: lists stay empty
+  }
+}
+
+// packs other players chose to share with everybody
+export async function loadGlobalPacks() {
+  try {
+    const res = await fetch(`${API}/wordlists?type=global`);
+    if (res.status !== 200) return;
+    const list = await res.json();
+    list.forEach((p) => {
+      packs[p.id] = p;
+    });
+    globalIds.value = list.map((p) => p.id);
+  } catch {
+    // offline: the list stays as it was
   }
 }
 

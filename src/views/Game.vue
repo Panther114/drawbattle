@@ -24,6 +24,7 @@ import {
   findCorrectGuess,
   roundWinner,
   totalScores,
+  voteThreshold,
 } from '../shared.js';
 import { API } from '../wordpacks.js';
 import { track } from '../analytics.js';
@@ -34,6 +35,7 @@ import { safeStorage } from '../storage.js';
 import { recordGame, recordRound } from '../stats.js';
 import { buildFacts, creditFor, recordMatch, score } from '../rating.js';
 import { presence, trackPresence } from '../presence.js';
+import { flashTab, stopFlash } from '../attention.js';
 import { qs, toggleQuick } from '../quickswitch.js';
 import Icon from '../components/Icon.vue';
 import AudioPreloader from '../components/AudioPreloader.vue';
@@ -222,9 +224,10 @@ function computeJoinStatus(g) {
   if (isGameEnded(g)) return JoinStatus.Ended;
   const started = g.fishbowlWords !== undefined || g.currentRound !== undefined || g.finalRound !== undefined;
   if (started) {
-    return Object.keys(g.users).some((id) => g.users[id].status === UserStatus.Disconnected)
-      ? JoinStatus.AvailableDisconnectedSpot
-      : JoinStatus.Started;
+    if (Object.keys(g.users).some((id) => g.users[id].status === UserStatus.Disconnected)) return JoinStatus.AvailableDisconnectedSpot;
+    // a player may also join a game in progress, when the lobby allows it and a team has room
+    const room = g.teams.some((t) => t.userIds.length < (g.settings.maxTeamSize ?? 8));
+    return g.settings.allowLateJoin !== false && room ? JoinStatus.LateJoin : JoinStatus.Started;
   }
   return g.teams.every((t) => t.userIds.length >= 8) ? JoinStatus.Full : JoinStatus.AvailableSpot;
 }
@@ -336,6 +339,8 @@ function onMessage(e) {
         g.currentRound = round;
       }
       clockOffset.value = Date.now() - serverNow;
+      // a new round while this window is in the background: flash the tab
+      flashTab(index === 0 ? '🎨 game starting!' : '🎨 new round!');
       break;
     }
     case S.UpdateUser:
@@ -466,6 +471,36 @@ function onMessage(e) {
         }, 1500);
       }
       break;
+    case S.EndVotes:
+      if (g !== undefined) g.endVotes = m[1];
+      break;
+    case S.GameEnded: {
+      // the game was stopped early (a vote passed, or everybody left): the round in progress counts as it stands
+      if (g === undefined) break;
+      const [, kept, reason] = m;
+      const r = g.currentRound;
+      if (r !== undefined) {
+        if (kept) {
+          if (r.word === undefined) {
+            r.word = r.wordChoices[0];
+            r.wordChosenTime = r.startTime + 1000 * rules.chooseWordSec;
+          }
+          g.previousRounds.push(r);
+        }
+        g.currentRound = undefined;
+      }
+      g.ended = true;
+      g.endedEarly = reason ?? 'vote';
+      g.endVotes = [];
+      showBackToLobby.value = true;
+      setTimeout(() => {
+        if (socket !== undefined) {
+          teardown();
+          connStatus.value = Conn.Disconnected;
+        }
+      }, 1500);
+      break;
+    }
     case S.ServerError:
       if (m[1].type === 'Closed') {
         teardown();
@@ -487,12 +522,15 @@ function onMessage(e) {
   }
 }
 
-function connect(status, name) {
+function connect(status, name, team) {
   if (socket !== undefined) return;
   connStatus.value = status;
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const q = new URLSearchParams({ gameId: gameId.value, userId: userId.value });
+  // spectators can chat too: they go by the name saved in this browser (or just "spectator")
+  if (name === undefined && isSpectator.value) name = local?.getItem('userName') || undefined;
   if (name !== undefined) q.set('userName', name);
+  if (team !== undefined) q.set('team', String(team));
   q.set('rating', String(score.rating)); // my own score, kept on this device
   if (isSpectator.value) q.set('spectate', 'true');
   socket = new ReconnectingSocket({ url: `${proto}//${window.location.host}/ws/?${q}`, onMessage });
@@ -554,6 +592,7 @@ async function fetchFullGame() {
 
 // ---- join/spectate handlers from lobby ----
 const joinGame = (name) => connect(Conn.ConnectingFromLobby, name);
+const lateJoin = ({ name, team }) => connect(Conn.ConnectingFromLobby, name, team);
 const spectate = () => {
   isSpectator.value = true;
   connect(Conn.ConnectingAsSpectator);
@@ -668,18 +707,42 @@ onMounted(async () => {
 });
 onUnmounted(() => {
   unmounted = true;
+  stopFlash();
   teardown();
   if (tickTimer !== undefined) clearInterval(tickTimer);
 });
 
 // what to show
+const lateRoom = computed(() => {
+  const g = game.value;
+  return g !== undefined && g.teams.some((t) => t.userIds.length < (g.settings.maxTeamSize ?? 8));
+});
+
+// ---- ending the game early: more than half of the active players must agree ----
+const activeIds = computed(() => {
+  const g = game.value;
+  return g ? g.teams.flatMap((t) => t.userIds).filter((id) => g.users[id]?.status === UserStatus.Connected) : [];
+});
+const endYes = computed(() => activeIds.value.filter((id) => (game.value?.endVotes ?? []).includes(id)).length);
+const endNeeded = computed(() => voteThreshold(Math.max(1, activeIds.value.length)));
+const endMine = computed(() => (game.value?.endVotes ?? []).includes(userId.value));
+const canEndVote = computed(
+  () =>
+    !isSpectator.value &&
+    isConnected.value &&
+    game.value?.users[userId.value]?.status === UserStatus.Connected &&
+    ['round', 'score', 'final'].includes(view.value),
+);
+
 const view = computed(() => {
   const g = game.value;
   if (g === undefined || (joinStatus.value !== undefined && !isUnavailableJoinStatus(joinStatus.value)) || isAutoConnecting.value) {
     return 'empty';
   }
   if (finalStage.value?.stage === FinalRoundStage.SummaryScreen || g.ended === true) return 'summary';
-  if (!isSpectator.value && joinStatus.value === JoinStatus.AvailableDisconnectedSpot) return 'rejoin';
+  if (!isSpectator.value && (joinStatus.value === JoinStatus.AvailableDisconnectedSpot || joinStatus.value === JoinStatus.LateJoin)) {
+    return 'rejoin';
+  }
   if ((currentRound.value === undefined && finalRound.value === undefined) || startCountdown.value !== undefined) return 'lobby';
   if (connStatus.value !== Conn.Connected) return 'empty';
   if (finalRound.value !== undefined) {
@@ -702,6 +765,17 @@ watch(view, (v) => {
       <div v-if="game && game.connectedAppInfo === undefined" class="game-info-row">
         <span>game {{ game.settings.streamerMode ? '****' : gameId.toUpperCase() }}</span>
         <router-link v-tooltip="'leave game'" to="/" class="leave-link" aria-label="leave game" />
+      </div>
+      <div v-if="canEndVote" class="game-info-row">
+        <button
+          v-tooltip="'more than half of the players must agree. the score is worked out right away'"
+          type="button"
+          class="end-vote"
+          :class="{ mine: endMine, hot: endYes > 0 }"
+          @click="send([C.VoteEnd])"
+        >
+          {{ endMine ? `ending: ${endYes}/${endNeeded}` : endYes > 0 ? `end game ${endYes}/${endNeeded}` : 'end game' }}
+        </button>
       </div>
       <div class="game-info-row">
         <template v-if="!isIOS()">
@@ -726,7 +800,13 @@ watch(view, (v) => {
     <GameJoinAsDisconnectedUser
       v-else-if="view === 'rejoin'"
       :users="game.users"
+      :teams="game.teams"
+      :can-late-join="game.settings.allowLateJoin !== false && lateRoom"
+      :pick-team="game.settings.lateJoinPickTeam === true"
+      :max-team-size="game.settings.maxTeamSize ?? 8"
+      :init-name="connectedUsername || previousGameUserName"
       @join-game="rejoinAs"
+      @late-join="lateJoin"
       @spectate-game="spectate"
     />
     <GameLobby

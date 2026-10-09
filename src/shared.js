@@ -25,10 +25,13 @@ export const DEFAULT_RULES = {
   alwaysRotate: false, // the drawer always rotates, even after winning
   allowSpectators: true,
   allowLateJoin: true,
+  lateJoinPickTeam: false, // someone joining a game in progress picks their team (off: the smaller team)
   singleWordsOnly: false, // only offer words without spaces
   maxWordLength: 0, // only offer words up to this many characters (0 = any)
   finalDrawdown: true, // play the final drawdown after the last round (off: the game ends after the last round)
 };
+// rules shown right in the lobby settings (not in the "customize rules" dialog)
+export const LOBBY_RULES = ['alwaysRotate', 'allowLateJoin', 'lateJoinPickTeam'];
 export const rules = reactive({ ...DEFAULT_RULES });
 export function applyRules(settings) {
   for (const k of Object.keys(DEFAULT_RULES)) {
@@ -125,6 +128,7 @@ export const JoinStatus = {
   Started: 'Started',
   AvailableSpot: 'AvailableSpot',
   AvailableDisconnectedSpot: 'AvailableDisconnectedSpot',
+  LateJoin: 'LateJoin',
   Full: 'Full',
   Ended: 'Ended',
   Closed: 'Closed',
@@ -156,6 +160,8 @@ export const S = {
   SwitchAppeals: 24,
   GameOver: 25,
   Presence: 26,
+  GameEnded: 27,
+  EndVotes: 28,
   ServerError: 300,
   ForceRefresh: 301,
 };
@@ -178,6 +184,7 @@ export const C = {
   SwitchAppeal: 114,
   SwitchVote: 115,
   Presence: 116,
+  VoteEnd: 117,
 };
 
 // canvas operations
@@ -345,7 +352,9 @@ export function finalRoundScores(finalRound) {
 }
 
 export function totalScores(previousRounds, finalRound) {
-  let t = previousRounds.map((r) => roundScores(r)).reduce((a, b) => a.map((x, i) => x + b[i]));
+  // a game ended before its first round was scored has no rounds at all
+  const teams = finalRound ? finalRound.teamStates.length : previousRounds[0] ? previousRounds[0].teamStates.length : 2;
+  let t = previousRounds.map((r) => roundScores(r)).reduce((a, b) => a.map((x, i) => x + b[i]), Array(teams).fill(0));
   if (finalRound) {
     const f = finalRoundScores(finalRound);
     t = t.map((x, i) => x + f[i]);
@@ -444,7 +453,12 @@ export function isIOS() {
 }
 
 export function isUnavailableJoinStatus(s) {
-  return s === JoinStatus.AvailableSpot || s === JoinStatus.AvailableDisconnectedSpot || s === JoinStatus.Ended;
+  return (
+    s === JoinStatus.AvailableSpot ||
+    s === JoinStatus.AvailableDisconnectedSpot ||
+    s === JoinStatus.LateJoin ||
+    s === JoinStatus.Ended
+  );
 }
 
 export function formatClock(totalSeconds) {

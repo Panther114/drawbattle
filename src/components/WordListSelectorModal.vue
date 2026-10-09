@@ -1,6 +1,6 @@
 <script setup>
-import { nextTick, ref } from 'vue';
-import { loadPack, officialIds, packs } from '../wordpacks.js';
+import { nextTick, ref, watch } from 'vue';
+import { globalIds, loadGlobalPacks, loadPack, officialIds, packs } from '../wordpacks.js';
 import { track } from '../analytics.js';
 import Modal from './Modal.vue';
 import WordPackEditor from './WordPackEditor.vue';
@@ -41,6 +41,14 @@ async function submitCustom(e) {
   else customError.value = 'word list not found';
 }
 
+watch(
+  tab,
+  (t) => {
+    if (t === 'community') void loadGlobalPacks();
+  },
+  { immediate: true },
+);
+
 function clickTab(name) {
   tab.value = name;
   track('click word pack modal tab', { 'game id': props.gameId, tab: name });
@@ -54,6 +62,7 @@ function clickTab(name) {
         <button class="wp-tab" :class="{ selected: tab === 'official' }" @click="clickTab('official')">
           official pack
         </button>
+        <button class="wp-tab" :class="{ selected: tab === 'community' }" @click="clickTab('community')">community</button>
         <button class="wp-tab" :class="{ selected: tab === 'mine' }" @click="clickTab('mine')">my packs</button>
       </div>
       <div v-if="tab === 'official'">
@@ -72,6 +81,14 @@ function clickTab(name) {
             </div>
             <button v-else class="wp-custom-button" @click="openCustom">enter a custom word pack id</button>
           </div>
+        </div>
+      </div>
+      <div v-else-if="tab === 'community'">
+        <template v-for="id in globalIds" :key="id">
+          <WordListSelectorItem v-if="packs[id] !== undefined" :word-list-id="id" @select-list="emit('select-list', id)" />
+        </template>
+        <div v-if="globalIds.length === 0" class="wp-community-empty">
+          nobody has shared a word pack yet. make one in "my packs" and share it with everyone!
         </div>
       </div>
       <WordPackEditor v-else :game-id="gameId" @use="(id) => emit('select-list', id)" />

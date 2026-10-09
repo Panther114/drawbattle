@@ -147,6 +147,14 @@ export function exportPack(p, format = 'json') {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+// share a pack with every player: it is uploaded, then listed under "community" in everyone's pack browser
+export async function sharePack(p) {
+  const meta = await uploadPack(p);
+  const res = await fetch(`${API}/wordpacks/${meta.id}/share`, { method: 'POST' });
+  if (res.status !== 200) throw new Error((await res.text()) || 'could not share the word pack');
+  return res.json();
+}
+
 // upload a pack to the server so it can be used in a game; resolves to the pack's server metadata
 export async function uploadPack(p) {
   const res = await fetch(`${API}/wordpacks`, {

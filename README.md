@@ -27,22 +27,30 @@ chill, chaos). All rules are stored in the game's settings, so they apply to eve
 | group | rules |
 |---|---|
 | timing | time to choose a word, countdown before drawing, result screen length, game start countdown, final-round pause between words |
-| scoring | points for first / second guess, final-round points per word and finishing bonus, head start base and step (or off), drawers always rotate |
+| scoring | points for first / second guess, final-round points per word and finishing bonus, head start base and step (or off) |
 | drawing | colour palette (full / basic / greys), allow eraser, allow clear |
 | guessing | 2-4 words to choose from, letter hints every N seconds, forgive one typo, single-word answers only, longest word allowed |
-| players | max team size, allow spectators, allow joining after the start |
+| players | max team size, allow spectators |
 
-The lobby settings next to it hold the round count, round length, *show word lengths*, *play the final drawdown* (turn it off and the game simply ends after the last round), *random teams* and streamer mode. Every number rule (and the round count and round length) takes a typed whole number, clamped to a sane range
+The lobby settings next to it hold the round count, round length, *show word lengths*, *play the final drawdown* (turn it off and the game simply ends after the last round), *random teams*, *drawers always rotate*, *allow joining mid-game* and *late joiners pick their team*. **Streamer mode** (hides the game code) lives in the customize rules dialog. Every number rule (and the round count and round length) takes a typed whole number, clamped to a sane range
 (rounds 1-200, round length 5-600 s).
 
 ### in-game chat, vote kick and team switching
 
 * **chat** – a compact panel at the bottom right of every game (lobby, rounds, final). Everyone, including both teams, sees it.
-  Spectators can read along. Messages are rate limited, and a message that contains the word currently being drawn is
+  Spectators can type too (their messages are marked *spectator*). Messages are rate limited, and a message that contains the word currently being drawn is
   blocked so nobody can spoil a round.
 * **vote kick** – open the *players* tab and press *votekick* next to someone. A kick needs **more than half of the other
   active players** (7 players: 6 can vote, 4 votes kick). It needs at least 3 active players and a team always keeps at least 2 players. If the kicked player was drawing (or choosing the word) the next active teammate takes over and the canvas is
   cleared. A kicked player cannot rejoin that game.
+* **end game** – the *end game* button (top right, during rounds and the final drawdown) is a vote: **more than half of the
+  active players** must press it, then the game ends at once and the score is worked out from what was played (a round in
+  progress counts as it stands; a round whose word was not chosen yet is left out). If **everybody disconnects** during a
+  game, it is ended and scored the same way after a 15 second grace period (page refreshes and wifi blips do not end it).
+* **new round alert** – when a round starts while the game window is in the background, the browser tab title flashes
+  until you come back.
+* **joining mid-game** – with *allow joining mid-game* on, someone opening the link of a running game can join as a new
+  player; with *late joiners pick their team* they choose the team, otherwise they go to the smaller one.
 * **forced start** – when someone forces the next round, a planned drawer who never pressed *continue* is skipped in favour
   of the next active teammate.
 * **switch teams** – between rounds, a player on a team with **more than 2 active players** can ask to switch. It passes
@@ -146,6 +154,10 @@ Packs live in your browser (localStorage). You can create and edit packs, show 1
 import single files or a **whole folder** (each `.txt`, `.csv` or `.json` file becomes a pack), and export as `.json` / `.txt`.
 **use in this game** uploads the pack to the server (kept in memory for 24 h, max 3000 words) and selects it for the
 lobby; **get a shareable id** gives a 6-digit id anyone can enter under *browse all packs → enter a custom word pack id*.
+**share with everyone** lists the pack under *browse all packs → community* for every player. It costs the server next to
+nothing: it is the same in-memory pack (no copy, no database), at most 24 community packs of 10-1500 words, a listing that is
+serialised once per change, 4 shares per hour per address, and packs nobody has played for 14 days are dropped by the existing
+cleanup sweep (no new timers).
 
 ## run
 

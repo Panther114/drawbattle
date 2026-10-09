@@ -13,7 +13,8 @@ import {
   wordListExists,
   addCustomPack,
   reapCustomPacks,
-  touchPack,
+  shareGlobal,
+  globalListJson,
 } from './wordpacks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -134,8 +135,23 @@ api.post('/wordpacks', packJson, (req, res) => {
   res.json(out.meta);
 });
 
+// share a stored custom pack with everybody (a few per hour per address; the list itself is small and capped)
+const shareLog = new Map();
+const inUsePacks = () => new Set([...games.values()].map((g) => g.settings && g.settings.wordListId));
+api.post('/wordpacks/:id/share', (req, res) => {
+  const now = Date.now();
+  const recent = (shareLog.get(req.ip) || []).filter((t) => now - t < 60 * 60 * 1000);
+  if (recent.length >= 4) return res.status(429).type('text/plain').send('you shared a lot of packs, try again later');
+  const out = shareGlobal(parseInt(req.params.id, 10), inUsePacks());
+  if (out.error) return res.status(400).type('text/plain').send(out.error);
+  recent.push(now);
+  shareLog.set(req.ip, recent);
+  res.json(out.meta);
+});
+
 api.get('/wordlists', (req, res) => {
   if (req.query.type === 'official') return res.json(officialMeta());
+  if (req.query.type === 'global') return res.type('application/json').send(globalListJson());
   res.json([]);
 });
 
@@ -187,6 +203,7 @@ wss.on('connection', (ws, url) => {
   const userName = url.searchParams.has('userName') ? url.searchParams.get('userName') : undefined;
   const spectate = url.searchParams.get('spectate') === 'true';
   const rating = url.searchParams.has('rating') ? url.searchParams.get('rating') : undefined;
+  const team = url.searchParams.has('team') ? Number(url.searchParams.get('team')) : undefined;
   const game = games.get(gameId);
   if (!game) {
     ws.send(JSON.stringify([300, { type: 'GameNotFound', gameId }]));
@@ -205,7 +222,7 @@ wss.on('connection', (ws, url) => {
   });
   let tokens = 300;
   let refill = Date.now();
-  game.connect(ws, { userId, userName, spectate, rating });
+  game.connect(ws, { userId, userName, spectate, rating, team });
   ws.on('message', (data) => {
     ws.isAlive = true;
     const raw = data.toString();
@@ -251,7 +268,8 @@ setInterval(
         games.delete(id);
       }
     }
-    reapCustomPacks(new Set([...games.values()].map((g) => g.settings && g.settings.wordListId)));
+    reapCustomPacks(inUsePacks());
+    for (const [ip, list] of shareLog) if (!list.some((t) => now - t < 60 * 60 * 1000)) shareLog.delete(ip);
     for (const [ip, list] of packLog) if (!list.some((t) => now - t < 10 * 60 * 1000)) packLog.delete(ip);
     for (const [ip, list] of createLog) if (!list.some((t) => now - t < 10 * 60 * 1000)) createLog.delete(ip);
   },
