@@ -13,6 +13,7 @@ export const DEFAULT_RULES = {
   pointsCorrect: 100, // points for guessing second
   finalWordPoints: 100, // final round: points per word
   finalBonusPoints: 100, // final round: bonus for finishing every word
+  headStart: true, // the team that keeps losing gets a head start (off: never)
   headStartBase: 3, // head start (s) at a 2-win streak (0 = no head starts)
   headStartStep: 1, // extra head start per additional win
   finalWordDelaySec: 2, // final round: pause before the next word
@@ -31,7 +32,7 @@ export const DEFAULT_RULES = {
   finalDrawdown: true, // play the final drawdown after the last round (off: the game ends after the last round)
 };
 // rules shown right in the lobby settings (not in the "customize rules" dialog)
-export const LOBBY_RULES = ['alwaysRotate', 'allowLateJoin', 'lateJoinPickTeam'];
+export const LOBBY_RULES = ['headStart', 'alwaysRotate', 'allowLateJoin', 'lateJoinPickTeam'];
 export const rules = reactive({ ...DEFAULT_RULES });
 export function applyRules(settings) {
   for (const k of Object.keys(DEFAULT_RULES)) {
@@ -304,7 +305,7 @@ export function winStreak(rounds, nextDrawers) {
 }
 
 export function headStartForStreak(streak) {
-  return streak < 2 || rules.headStartBase <= 0 ? 0 : rules.headStartBase + (streak - 2) * rules.headStartStep;
+  return !rules.headStart || streak < 2 || rules.headStartBase <= 0 ? 0 : rules.headStartBase + (streak - 2) * rules.headStartStep;
 }
 
 // per-team result of a round

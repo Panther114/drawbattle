@@ -29,6 +29,7 @@ const randomTeams = ref(props.gameSettings.randomTeams === true);
 const copied = ref(false);
 const modalOpen = ref(false);
 const rulesOpen = ref(false);
+const headStart = ref(props.gameSettings.headStart !== false);
 const alwaysRotate = ref(props.gameSettings.alwaysRotate === true);
 const allowLateJoin = ref(props.gameSettings.allowLateJoin !== false);
 const lateJoinPickTeam = ref(props.gameSettings.lateJoinPickTeam === true);
@@ -62,6 +63,7 @@ const current = () => ({
   streamerMode: streamerMode.value,
   finalDrawdown: finalDrawdown.value,
   randomTeams: randomTeams.value,
+  headStart: headStart.value,
   alwaysRotate: alwaysRotate.value,
   allowLateJoin: allowLateJoin.value,
   lateJoinPickTeam: lateJoinPickTeam.value,
@@ -104,6 +106,12 @@ function changeRandom(e) {
   track('change game setting', { 'game id': props.gameId, key: 'randomTeams', value: v });
   randomTeams.value = v;
   send({ ...current(), randomTeams: v });
+}
+function changeHeadStart(e) {
+  const v = e.target.checked;
+  track('change game setting', { 'game id': props.gameId, key: 'headStart', value: v });
+  headStart.value = v;
+  send({ ...current(), headStart: v });
 }
 function changeRotate(e) {
   const v = e.target.checked;
@@ -161,6 +169,7 @@ watch(
     streamerMode.value = s.streamerMode;
     finalDrawdown.value = s.finalDrawdown !== false;
     randomTeams.value = s.randomTeams === true;
+    headStart.value = s.headStart !== false;
     alwaysRotate.value = s.alwaysRotate === true;
     allowLateJoin.value = s.allowLateJoin !== false;
     lateJoinPickTeam.value = s.lateJoinPickTeam === true;
@@ -284,6 +293,10 @@ const listIds = computed(() => {
           <div class="st-item">
             <label for="randomTeams" class="st-checkbox-label">random teams</label>
             <input id="randomTeams" type="checkbox" :checked="randomTeams" :disabled="disabled" @change="changeRandom" />
+          </div>
+          <div class="st-item">
+            <label for="headStart" class="st-checkbox-label">head start for the losing team</label>
+            <input id="headStart" type="checkbox" :checked="headStart" :disabled="disabled" @change="changeHeadStart" />
           </div>
           <div class="st-item">
             <label for="alwaysRotate" class="st-checkbox-label">drawers always rotate</label>

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { C, MAX_CHAT_LENGTH, UserStatus, rules, voteThreshold } from '../shared.js';
 import { safeStorage } from '../storage.js';
 import Icon from './Icon.vue';
@@ -22,6 +22,78 @@ const unread = ref(0);
 const list = ref();
 const input = ref();
 let pinned = true; // keep the newest message in view unless the reader scrolled up
+
+// ---- movable / resizable panel: right+bottom offsets and list size, remembered per device ----
+const W_MIN = 220, W_MAX = 520, H_MIN = 90, H_MAX = 520;
+const root = ref();
+const panel = ref();
+const geo = reactive({ right: 12, bottom: 12, w: 268, h: 176 });
+let custom = false;
+try {
+  const g = JSON.parse(storage?.getItem('chatGeo') ?? 'null');
+  if (g && ['right', 'bottom', 'w', 'h'].every((k) => Number.isFinite(g[k]))) {
+    Object.assign(geo, g);
+    custom = true;
+  }
+} catch {
+  /* ignore a corrupt value */
+}
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+function fit() {
+  geo.w = clamp(geo.w, W_MIN, Math.max(W_MIN, Math.min(W_MAX, innerWidth - 16)));
+  geo.h = clamp(geo.h, H_MIN, Math.max(H_MIN, Math.min(H_MAX, innerHeight - 140)));
+  const pw = panel.value?.offsetWidth ?? geo.w;
+  const ph = panel.value?.offsetHeight ?? geo.h + 100;
+  geo.right = clamp(geo.right, 0, Math.max(0, innerWidth - pw));
+  geo.bottom = clamp(geo.bottom, 0, Math.max(0, innerHeight - ph));
+}
+function saveGeo() {
+  custom = true;
+  storage?.setItem('chatGeo', JSON.stringify({ right: geo.right, bottom: geo.bottom, w: geo.w, h: geo.h }));
+}
+const gcStyle = computed(() =>
+  custom
+    ? { right: geo.right + 'px', bottom: geo.bottom + 'px', '--gc-w': geo.w + 'px', '--gc-h': geo.h + 'px' }
+    : {},
+);
+function startDrag(e, kind) {
+  if (e.button > 0 || e.target.closest('button')) return;
+  e.preventDefault();
+  custom = true;
+  const sx = e.clientX, sy = e.clientY, start = { ...geo };
+  const move = (ev) => {
+    const dx = ev.clientX - sx, dy = ev.clientY - sy;
+    if (kind === 'move') {
+      geo.right = start.right - dx;
+      geo.bottom = start.bottom - dy;
+    } else {
+      // the bottom-right corner stays put; the top-left handle grows the panel up and to the left
+      geo.w = start.w - dx;
+      geo.h = start.h - dy;
+    }
+    fit();
+  };
+  const end = () => {
+    removeEventListener('pointermove', move);
+    removeEventListener('pointerup', end);
+    removeEventListener('pointercancel', end);
+    saveGeo();
+  };
+  addEventListener('pointermove', move);
+  addEventListener('pointerup', end);
+  addEventListener('pointercancel', end);
+}
+function resetGeo() {
+  Object.assign(geo, { right: 12, bottom: 12, w: 268, h: 176 });
+  custom = false;
+  storage?.removeItem('chatGeo');
+}
+const onWinResize = () => custom && fit();
+onMounted(() => {
+  addEventListener('resize', onWinResize);
+  if (custom) nextTick(fit);
+});
+onBeforeUnmount(() => removeEventListener('resize', onWinResize));
 
 const messages = computed(() => props.game.chat ?? []);
 const users = computed(() => props.game.users);
@@ -145,7 +217,7 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
 </script>
 
 <template>
-  <aside class="gc" :class="{ closed: !open }" aria-label="game chat">
+  <aside ref="root" class="gc" :class="{ closed: !open }" :style="gcStyle" aria-label="game chat">
     <Transition name="gc-swap" mode="out-in">
     <button v-if="!open" key="pill" type="button" class="gc-pill" @click="setOpen(true)">
       <Icon name="chat" class="gc-pill-icon" />
@@ -153,8 +225,9 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
       <span v-if="unread > 0" :key="unread" class="gc-badge">{{ unread > 9 ? '9+' : unread }}</span>
     </button>
 
-    <section v-else key="panel" class="gc-panel">
-      <header class="gc-head">
+    <section v-else key="panel" ref="panel" class="gc-panel">
+      <div class="gc-resize" title="drag to resize" @pointerdown="startDrag($event, 'size')" @dblclick="resetGeo" />
+      <header class="gc-head" title="drag to move, double-click to reset" @pointerdown="startDrag($event, 'move')" @dblclick="resetGeo">
         <div class="gc-tabs" role="tablist">
           <button type="button" role="tab" :aria-selected="tab === 'chat'" :class="{ on: tab === 'chat' }" @click="setTab('chat')">
             <Icon name="chat" class="gc-tab-ic c-blue" />chat

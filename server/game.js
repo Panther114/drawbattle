@@ -62,6 +62,7 @@ export const DEFAULT_RULES = {
   startCountdownSec: 5,
   drawingCountdownSec: 3,
   roundEndSec: 5,
+  headStart: true,
   headStartBase: 3,
   headStartStep: 1,
   finalWordDelaySec: 2,
@@ -1271,7 +1272,7 @@ export class Game {
     const winner = roundWinner(last, this.fz);
     const streak = this.streakFor(rounds, drawers);
     const hsBase = this.rule('headStartBase');
-    const headStart = streak < 2 || hsBase <= 0 ? 0 : hsBase + (streak - 2) * this.rule('headStartStep');
+    const headStart = !this.rule('headStart') || streak < 2 || hsBase <= 0 ? 0 : hsBase + (streak - 2) * this.rule('headStartStep');
     // the losing team's drawer chooses; with no winner the team that chose last time chooses again
     let chooserTeam;
     if (winner !== undefined) chooserTeam = 1 - winner;
