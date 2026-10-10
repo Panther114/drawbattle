@@ -12,7 +12,7 @@ const storage = safeStorage('local');
 function load() {
   try {
     const parsed = JSON.parse(storage?.getItem(KEY) ?? 'null');
-    if (parsed && Array.isArray(parsed.games)) return parsed.games.filter((g) => g && typeof g.k === 'string' && Array.isArray(g.r));
+    if (parsed && Array.isArray(parsed.games)) return parsed.games.filter((g) => g && typeof g.k === 'string' && Array.isArray(g.r) && !g.recovered); // `recovered` entries were guesses from a dropped recovery attempt
   } catch {
     // corrupt data: start over
   }
@@ -60,19 +60,6 @@ export function recordGame(key, result, mine, theirs, mark = undefined, players 
   g.mark = mark;
   if (players) g.players = players;
   g.t = Date.now();
-  save();
-  return true;
-}
-
-// A game whose finish was never saved and that the server no longer has: the result is worked out from the saved
-// rounds (points won minus points lost). The final scores are unknown, so the entry has no score line.
-export function finishRecovered(key) {
-  const g = stats.games.find((x) => x.k === key);
-  if (!g || g.done || g.r.length === 0) return false;
-  const net = g.r.reduce((a, x) => a + (x[3] || 0), 0);
-  g.done = true;
-  g.recovered = true;
-  g.result = net > 0 ? 'win' : net < 0 ? 'loss' : 'draw';
   save();
   return true;
 }

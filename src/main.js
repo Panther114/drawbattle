@@ -12,7 +12,6 @@ import QuickSwitch from './views/QuickSwitch.vue';
 import { initTheme } from './theme.js';
 import { tooltip } from './tooltip.js';
 import { loadOfficialPacks } from './wordpacks.js';
-import { recoverGames } from './recover.js';
 import './style.css';
 
 const routes = [
@@ -50,4 +49,3 @@ app.directive('tooltip', tooltip);
 app.use(router);
 void loadOfficialPacks();
 app.mount('#app');
-void recoverGames();
