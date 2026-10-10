@@ -22,7 +22,9 @@ import {
   applyRules,
   rules,
   findCorrectGuess,
+  roundScores,
   roundWinner,
+  teamPerformance,
   totalScores,
   voteThreshold,
 } from '../shared.js';
@@ -621,19 +623,36 @@ watch(joinStatus, (s) => {
 // ---- personal stats (kept in this browser only) ----
 const gameKey = computed(() => (game.value ? `${game.value.id}-${game.value.createdAt ?? 0}` : undefined));
 const isPlayer = computed(() => wasLive && !isSpectator.value && teamIndex.value >= 0);
-watch(roundStage, (stage) => {
-  const r = currentRound.value;
-  if (stage !== RoundStage.ScoreScreen || r === undefined || !isPlayer.value || r.word === undefined) return;
+// every round is recorded exactly once, as soon as it is over: from the score screen, or when it moves into the
+// finished rounds (a background tab may never tick through the score screen, e.g. when everyone readies up fast)
+function recordRoundAt(idx, rounds) {
+  const g = game.value;
   const ti = teamIndex.value;
-  recordRound(gameKey.value, game.value.previousRounds.length, r.teamStates[ti].drawerId === userId.value ? 'd' : 'g', roundWinner(r) === ti);
+  const r = rounds[idx];
+  if (!g || ti < 0 || !r || r.word === undefined) return;
+  const scores = roundScores(r);
+  const mark = teamPerformance(rounds.slice(0, idx + 1), ti, g.settings.roundLengthSec)?.mark;
+  recordRound(gameKey.value, idx, r.teamStates[ti].drawerId === userId.value ? 'd' : 'g', roundWinner(r) === ti, scores[ti] - scores[1 - ti], mark);
+}
+function recordFinishedRounds() {
+  const g = game.value;
+  if (!g || !isPlayer.value) return;
+  g.previousRounds.forEach((_, i) => recordRoundAt(i, g.previousRounds));
+}
+watch(roundStage, (stage) => {
+  const g = game.value;
+  if (stage !== RoundStage.ScoreScreen || currentRound.value === undefined || !isPlayer.value || !g) return;
+  recordRoundAt(g.previousRounds.length, [...g.previousRounds, currentRound.value]);
 });
+watch(() => game.value?.previousRounds.length, recordFinishedRounds);
 function recordFinish() {
   const g = game.value;
   if (g === undefined || !isPlayer.value || g.previousRounds.length === 0) return;
+  recordFinishedRounds();
   const totals = totalScores(g.previousRounds, g.finalRound);
   const mine = totals[teamIndex.value];
   const theirs = totals[1 - teamIndex.value];
-  recordGame(gameKey.value, mine > theirs ? 'win' : mine < theirs ? 'loss' : 'draw', mine, theirs);
+  recordGame(gameKey.value, mine > theirs ? 'win' : mine < theirs ? 'loss' : 'draw', mine, theirs, teamPerformance(g.previousRounds, teamIndex.value, g.settings.roundLengthSec)?.mark);
   recordMatch(buildFacts(g, gameKey.value), userId.value);
 }
 

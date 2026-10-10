@@ -335,6 +335,35 @@ export function roundResults(round) {
 
 export const roundScores = (round) => roundResults(round).map((r) => r.score);
 
+// ---- team performance mark (S best ... F worst) ----
+// Independent of who won: it only looks at how often and how fast a team got the word. A round is worth 0 when the
+// team never guessed it, else 0.3 for the guess plus up to 0.7 for speed (counted from when the team could start
+// drawing). The mark grades the average over the rounds played so far.
+export const PERF_MARKS = ['S', 'A', 'B', 'C', 'D', 'F'];
+const PERF_CUTOFFS = [0.85, 0.7, 0.55, 0.4, 0.2];
+
+export function markFor(value) {
+  const i = PERF_CUTOFFS.findIndex((c) => value >= c);
+  return PERF_MARKS[i === -1 ? PERF_MARKS.length - 1 : i];
+}
+
+// 0..1 for one team in one round, or undefined if the round never got a word
+export function roundPerformance(round, teamIndex, roundLengthSec) {
+  if (!round || round.word === undefined || round.wordChosenTime === undefined) return undefined;
+  const g = findCorrectGuess(round.teamStates[teamIndex].guesses, round.word);
+  if (!g) return 0;
+  const used = (g.timestamp - drawingStartTime(round, teamIndex)) / 1000 / Math.max(1, roundLengthSec);
+  return 0.3 + 0.7 * Math.min(1, Math.max(0, 1 - used));
+}
+
+// { value, mark, rate } over the given rounds; rate = share of rounds in which the team got the word
+export function teamPerformance(rounds, teamIndex, roundLengthSec) {
+  const vals = rounds.map((r) => roundPerformance(r, teamIndex, roundLengthSec)).filter((v) => v !== undefined);
+  if (vals.length === 0) return undefined;
+  const value = vals.reduce((a, b) => a + b, 0) / vals.length;
+  return { value, mark: markFor(value), rate: vals.filter((v) => v > 0).length / vals.length };
+}
+
 // number of final-round words a team has completed
 export function finalWordsDone(finalRound, teamIndex) {
   const states = finalRound.teamStates[teamIndex];

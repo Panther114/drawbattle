@@ -6,7 +6,7 @@ const KEY = 'drawbattle.stats.v1';
 const MAX_GAMES = 300;
 const storage = safeStorage('local');
 
-// games: [{ k: game key, t: first seen (ms), r: [[roundIndex, 'd' | 'g', won 0/1]], done, result: 'win' | 'loss' | 'draw', mine, theirs }]
+// games: [{ k: game key, t: first seen (ms), r: [[roundIndex, 'd' | 'g', won 0/1, points gained - points lost, team mark]], done, result: 'win' | 'loss' | 'draw', mine, theirs, mark }]
 function load() {
   try {
     const parsed = JSON.parse(storage?.getItem(KEY) ?? 'null');
@@ -38,22 +38,24 @@ function entry(key) {
 }
 
 // one finished round, from the point of view of the local player: role 'd' (drawer) or 'g' (guesser)
-export function recordRound(key, roundIndex, role, won) {
+export function recordRound(key, roundIndex, role, won, net = 0, mark = undefined) {
   const g = entry(key);
   if (g.r.some((x) => x[0] === roundIndex)) return false;
-  g.r.push([roundIndex, role === 'd' ? 'd' : 'g', won ? 1 : 0]);
+  g.r.push([roundIndex, role === 'd' ? 'd' : 'g', won ? 1 : 0, net, mark]);
+  g.r.sort((a, b) => a[0] - b[0]);
   save();
   return true;
 }
 
 // a finished game: result is 'win' | 'loss' | 'draw'
-export function recordGame(key, result, mine, theirs) {
+export function recordGame(key, result, mine, theirs, mark = undefined) {
   const g = entry(key);
   if (g.done) return false;
   g.done = true;
   g.result = result;
   g.mine = mine;
   g.theirs = theirs;
+  g.mark = mark;
   g.t = Date.now();
   save();
   return true;

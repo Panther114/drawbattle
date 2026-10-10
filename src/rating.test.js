@@ -134,3 +134,29 @@ test('buildFacts: who guessed first, drawer credit, result', () => {
   assert.equal(p.a2.rounds[1][2], 0.38);
   assert.deepEqual([p.a1.res, p.b1.res], ['w', 'l']);
 });
+
+test('team performance mark ignores who won: speed and word rate decide', async () => {
+  const { teamPerformance, markFor } = await import('./shared.js');
+  const T = 60;
+  // drawing starts at wordChosenTime + 3 s countdown; `t` is seconds after that, undefined = never guessed
+  const round = (a, b) => ({
+    word: 'cat',
+    wordChosenTime: 0,
+    chooserId: 'x',
+    chooserHeadStartSeconds: 0,
+    teamStates: [a, b].map((t, i) => ({
+      drawerId: 'd' + i,
+      guesses: t === undefined ? [] : [{ userId: 'u', guess: 'cat', timestamp: 3000 + t * 1000 }],
+    })),
+  });
+  // both teams are quick: both get a top mark, even though only one of them won
+  const quick = [round(3, 5), round(4, 6)];
+  assert.equal(teamPerformance(quick, 0, T).mark, 'S');
+  assert.equal(teamPerformance(quick, 1, T).mark, 'S');
+  // the winner of every round is slow and misses half the words
+  const slowWinner = [round(55, undefined), round(58, undefined)];
+  assert.equal(teamPerformance(slowWinner, 0, T).mark, 'D', 'winning does not lift a slow team');
+  assert.equal(teamPerformance(slowWinner, 1, T).mark, 'F', 'never guessing is an F');
+  assert.equal(teamPerformance([], 0, T), undefined);
+  assert.deepEqual(['S', 'A', 'B', 'C', 'D', 'F'], [1, 0.75, 0.6, 0.45, 0.25, 0].map(markFor));
+});
