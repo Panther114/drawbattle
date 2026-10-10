@@ -64,6 +64,19 @@ export function recordGame(key, result, mine, theirs, mark = undefined, players 
   return true;
 }
 
+// A game whose finish was never saved and that the server no longer has: the result is worked out from the saved
+// rounds (points won minus points lost). The final scores are unknown, so the entry has no score line.
+export function finishRecovered(key) {
+  const g = stats.games.find((x) => x.k === key);
+  if (!g || g.done || g.r.length === 0) return false;
+  const net = g.r.reduce((a, x) => a + (x[3] || 0), 0);
+  g.done = true;
+  g.recovered = true;
+  g.result = net > 0 ? 'win' : net < 0 ? 'loss' : 'draw';
+  save();
+  return true;
+}
+
 // Games saved before the performance mark existed: estimate it from what this browser kept. The match facts hold the
 // speed of every guess my team made (a draw cannot tell the two teams apart, so both are averaged), and the round
 // list says how many rounds there were. Missed words count as 0, exactly like in a live game.

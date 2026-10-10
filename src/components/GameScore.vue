@@ -52,10 +52,10 @@ const later = (fn, ms) => timers.push(setTimeout(fn, ms));
 function ready() {
   if (readyLock.value) return;
   emit('client-message', [C.ReadyUp, props.roundIndex]);
-  readyLock.value = true;
+  readyLock.value = true; // one click a second: the same button also takes the ready back
   setTimeout(() => {
     readyLock.value = false;
-  }, 3000);
+  }, 1000);
 }
 function forceStart() {
   emit('client-message', [C.ForceStartNextRound, props.roundIndex]);
@@ -219,7 +219,7 @@ void drawingStartTime;
           </div>
         </div>
         <template v-if="!isSpectator">
-          <Btn :disabled="iAmReady" :icon="iAmReady ? 'check' : 'next'" @click="ready">{{ iAmReady ? 'waiting...' : lastNoFinal ? 'see results' : 'continue' }}</Btn>
+          <Btn :disabled="readyLock" :icon="iAmReady ? 'check' : 'next'" :title="iAmReady ? 'click to cancel' : undefined" @click="ready">{{ iAmReady ? 'waiting... (click to cancel)' : lastNoFinal ? 'see results' : 'continue' }}</Btn>
           <button v-if="showForce" class="sc-force-start" @click="forceStart">
             {{ lastNoFinal ? 'show the final results' : `start ${isLastRound ? 'final drawdown' : 'next round'}` }}
           </button>

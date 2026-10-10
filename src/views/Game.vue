@@ -22,10 +22,6 @@ import {
   applyRules,
   rules,
   findCorrectGuess,
-  roundScores,
-  roundWinner,
-  teamPerformance,
-  totalScores,
   voteThreshold,
 } from '../shared.js';
 import { API } from '../wordpacks.js';
@@ -34,8 +30,8 @@ import { nav, takePreviousGameUserName } from '../nav.js';
 import { playSound } from '../audio.js';
 import { ReconnectingSocket } from '../socket.js';
 import { safeStorage } from '../storage.js';
-import { recordGame, recordRound } from '../stats.js';
-import { buildFacts, creditFor, recordMatch, score } from '../rating.js';
+import { recordFinishedGame, recordRoundOf } from '../finish.js';
+import { creditFor, score } from '../rating.js';
 import { presence, trackPresence } from '../presence.js';
 import { flashTab, stopFlash } from '../attention.js';
 import { qs, toggleQuick } from '../quickswitch.js';
@@ -107,7 +103,7 @@ const clockOffset = ref(0); // Date.now() - serverNow
 let tickTimer;
 let pingTimer;
 let unmounted = false;
-let wasLive = false; // true once this tab has been connected to the game as part of the session (for local stats)
+const wasLive = ref(false); // true once this tab has been connected to the game as part of the session (for local stats)
 
 const currentRound = computed(() => game.value?.currentRound);
 const finalRound = computed(() => game.value?.finalRound);
@@ -263,7 +259,7 @@ function onMessage(e) {
       const [, snapshot, serverNow] = m;
       game.value = snapshot;
       connStatus.value = Conn.Connected;
-      wasLive = true;
+      wasLive.value = true;
       clockOffset.value = Date.now() - serverNow;
       lastAwardKey = award.value?.key; // a reconnect must not pay out a guess again
       if (presence.value !== UserPresence.Active && !isSpectator.value) socket?.send(JSON.stringify([C.Presence, presence.value]));
@@ -353,7 +349,6 @@ function onMessage(e) {
       if (g?.currentRound === undefined) break;
       const cur = g.previousRounds.length;
       if (cur !== idx) break;
-      if (readyUserIds.value[cur] !== undefined && readyUserIds.value[cur].size > ids.length) break;
       readyUserIds.value[cur] = new Set(ids);
       break;
     }
@@ -622,16 +617,13 @@ watch(joinStatus, (s) => {
 
 // ---- personal stats (kept in this browser only) ----
 const gameKey = computed(() => (game.value ? `${game.value.id}-${game.value.createdAt ?? 0}` : undefined));
-const isPlayer = computed(() => wasLive && !isSpectator.value && teamIndex.value >= 0);
+// my user id is stable for this tab, so being on a team of the game is what makes me a player of it. (Do not tie this
+// to the live connection: that is not reactive, and a stale `false` would stay cached until the team changes.)
+const isPlayer = computed(() => !isSpectator.value && teamIndex.value >= 0);
 // every round is recorded exactly once, as soon as it is over: from the score screen, or when it moves into the
 // finished rounds (a background tab may never tick through the score screen, e.g. when everyone readies up fast)
 function recordRoundAt(idx, rounds) {
-  const g = game.value;
-  const ti = teamIndex.value;
-  const r = rounds[idx];
-  if (!g || ti < 0 || !r || r.word === undefined) return;
-  const scores = roundScores(r);
-  recordRound(gameKey.value, idx, r.teamStates[ti].drawerId === userId.value ? 'd' : 'g', roundWinner(r) === ti, scores[ti] - scores[1 - ti]);
+  recordRoundOf(gameKey.value, idx, rounds, teamIndex.value, userId.value);
 }
 function recordFinishedRounds() {
   const g = game.value;
@@ -644,19 +636,9 @@ watch(roundStage, (stage) => {
   recordRoundAt(g.previousRounds.length, [...g.previousRounds, currentRound.value]);
 });
 watch(() => game.value?.previousRounds.length, recordFinishedRounds);
-// who was in the game, by team: 0 = mine, 1 = the other side
-function playersOf(g) {
-  return g.teams.flatMap((t, i) => t.userIds.map((id) => [g.users[id]?.name || 'anonymous', i === teamIndex.value ? 0 : 1]));
-}
 function recordFinish() {
   const g = game.value;
-  if (g === undefined || !isPlayer.value || g.previousRounds.length === 0) return;
-  recordFinishedRounds();
-  const totals = totalScores(g.previousRounds, g.finalRound);
-  const mine = totals[teamIndex.value];
-  const theirs = totals[1 - teamIndex.value];
-  recordGame(gameKey.value, mine > theirs ? 'win' : mine < theirs ? 'loss' : 'draw', mine, theirs, teamPerformance(g.previousRounds, teamIndex.value, g.settings.roundLengthSec)?.mark, playersOf(g));
-  recordMatch(buildFacts(g, gameKey.value), userId.value);
+  if (g !== undefined && isPlayer.value) recordFinishedGame(g, gameKey.value, userId.value);
 }
 
 // ---- my score: points show up as they are earned (the final table at the end shares out the pot) ----
@@ -667,7 +649,7 @@ const award = computed(() => {
   const r = currentRound.value;
   const g = game.value;
   const ti = teamIndex.value;
-  if (!r || !g || r.word === undefined || ti < 0 || isSpectator.value || !wasLive) return undefined;
+  if (!r || !g || r.word === undefined || ti < 0 || isSpectator.value || !wasLive.value) return undefined;
   const mine = findCorrectGuess(r.teamStates[ti].guesses, r.word);
   if (!mine) return undefined;
   const drawing = r.teamStates[ti].drawerId === userId.value;

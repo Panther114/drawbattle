@@ -23,15 +23,15 @@ const list = ref();
 const input = ref();
 let pinned = true; // keep the newest message in view unless the reader scrolled up
 
-// ---- movable / resizable panel: right+bottom offsets and list size, remembered per device ----
+// ---- movable / resizable panel: left+bottom offsets and list size, remembered per device ----
 const W_MIN = 220, W_MAX = 520, H_MIN = 90, H_MAX = 520;
 const root = ref();
 const panel = ref();
-const geo = reactive({ right: 12, bottom: 12, w: 268, h: 176 });
+const geo = reactive({ left: 12, bottom: 12, w: 268, h: 176 });
 let custom = false;
 try {
-  const g = JSON.parse(storage?.getItem('chatGeo') ?? 'null');
-  if (g && ['right', 'bottom', 'w', 'h'].every((k) => Number.isFinite(g[k]))) {
+  const g = JSON.parse(storage?.getItem('chatGeo2') ?? 'null');
+  if (g && ['left', 'bottom', 'w', 'h'].every((k) => Number.isFinite(g[k]))) {
     Object.assign(geo, g);
     custom = true;
   }
@@ -44,16 +44,16 @@ function fit() {
   geo.h = clamp(geo.h, H_MIN, Math.max(H_MIN, Math.min(H_MAX, innerHeight - 140)));
   const pw = panel.value?.offsetWidth ?? geo.w;
   const ph = panel.value?.offsetHeight ?? geo.h + 100;
-  geo.right = clamp(geo.right, 0, Math.max(0, innerWidth - pw));
+  geo.left = clamp(geo.left, 0, Math.max(0, innerWidth - pw));
   geo.bottom = clamp(geo.bottom, 0, Math.max(0, innerHeight - ph));
 }
 function saveGeo() {
   custom = true;
-  storage?.setItem('chatGeo', JSON.stringify({ right: geo.right, bottom: geo.bottom, w: geo.w, h: geo.h }));
+  storage?.setItem('chatGeo2', JSON.stringify({ left: geo.left, bottom: geo.bottom, w: geo.w, h: geo.h }));
 }
 const gcStyle = computed(() =>
   custom
-    ? { right: geo.right + 'px', bottom: geo.bottom + 'px', '--gc-w': geo.w + 'px', '--gc-h': geo.h + 'px' }
+    ? { left: geo.left + 'px', bottom: geo.bottom + 'px', '--gc-w': geo.w + 'px', '--gc-h': geo.h + 'px' }
     : {},
 );
 function startDrag(e, kind) {
@@ -64,11 +64,11 @@ function startDrag(e, kind) {
   const move = (ev) => {
     const dx = ev.clientX - sx, dy = ev.clientY - sy;
     if (kind === 'move') {
-      geo.right = start.right - dx;
+      geo.left = start.left + dx;
       geo.bottom = start.bottom - dy;
     } else {
-      // the bottom-right corner stays put; the top-left handle grows the panel up and to the left
-      geo.w = start.w - dx;
+      // the bottom-left corner stays put; the top-right handle grows the panel up and to the right
+      geo.w = start.w + dx;
       geo.h = start.h - dy;
     }
     fit();
@@ -84,16 +84,39 @@ function startDrag(e, kind) {
   addEventListener('pointercancel', end);
 }
 function resetGeo() {
-  Object.assign(geo, { right: 12, bottom: 12, w: 268, h: 176 });
+  Object.assign(geo, { left: 12, bottom: 12, w: 268, h: 176 });
   custom = false;
-  storage?.removeItem('chatGeo');
+  storage?.removeItem('chatGeo2');
 }
 const onWinResize = () => custom && fit();
+// "/" jumps between the chat and the guess box (while either is empty, so a typed "/" still works)
+function onSlash(e) {
+  if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+  const el = document.activeElement;
+  const typing = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el?.isContentEditable;
+  const inChat = typing && el === input.value;
+  const inGuess = typing && el.classList.contains('mp-guess-input');
+  if (typing && !inChat && !inGuess) return;
+  if (typing && el.value !== '') return;
+  e.preventDefault();
+  if (inChat) {
+    el.blur();
+    document.querySelector('.mp-guess-input')?.focus();
+    return;
+  }
+  setOpen(true);
+  setTab('chat');
+  nextTick(() => input.value?.focus());
+}
 onMounted(() => {
   addEventListener('resize', onWinResize);
+  addEventListener('keydown', onSlash);
   if (custom) nextTick(fit);
 });
-onBeforeUnmount(() => removeEventListener('resize', onWinResize));
+onBeforeUnmount(() => {
+  removeEventListener('resize', onWinResize);
+  removeEventListener('keydown', onSlash);
+});
 
 const messages = computed(() => props.game.chat ?? []);
 const users = computed(() => props.game.users);
@@ -221,7 +244,7 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
     <Transition name="gc-swap" mode="out-in">
     <button v-if="!open" key="pill" type="button" class="gc-pill" @click="setOpen(true)">
       <Icon name="chat" class="gc-pill-icon" />
-      chat
+      chat <kbd class="gc-kbd">/</kbd>
       <span v-if="unread > 0" :key="unread" class="gc-badge">{{ unread > 9 ? '9+' : unread }}</span>
     </button>
 
@@ -267,7 +290,7 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
             type="text"
             class="gc-input"
             :maxlength="MAX_CHAT_LENGTH"
-            :placeholder="isSpectator ? 'chat as a spectator...' : 'say something...'"
+            :placeholder="isSpectator ? 'chat as a spectator... (/ to switch)' : 'say something... (/ to switch)'"
             autocomplete="off"
             autocorrect="off"
             spellcheck="false"
@@ -277,6 +300,7 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
             <Icon name="send" />
           </button>
         </form>
+        <div class="gc-hint"><kbd>/</kbd> jumps between chat and your guess box</div>
       </div>
 
       <div v-show="tab === 'players'" class="gc-players">

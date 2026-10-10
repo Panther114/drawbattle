@@ -3837,10 +3837,10 @@ a:hover {
   height: 18px;
 }
 
-/* ===== game chat (compact, bottom right) ===== */
+/* ===== game chat (compact, bottom left) ===== */
 .gc {
   position: fixed;
-  right: 12px;
+  left: 12px;
   bottom: 12px;
   z-index: 40;
   font-size: 15px;
@@ -3893,23 +3893,23 @@ a:hover {
 .gc-resize {
   position: absolute;
   top: 0;
-  left: 0;
-  width: 16px;
-  height: 16px;
+  right: 0;
+  width: 14px;
+  height: 14px;
   z-index: 2;
-  cursor: nwse-resize;
+  cursor: nesw-resize;
   touch-action: none;
 }
 .gc-resize::before {
   content: '';
   position: absolute;
   top: 4px;
-  left: 4px;
+  right: 4px;
   width: 7px;
   height: 7px;
   border-top: 2px solid var(--gray);
-  border-left: 2px solid var(--gray);
-  border-top-left-radius: 4px;
+  border-right: 2px solid var(--gray);
+  border-top-right-radius: 4px;
   opacity: 0.55;
 }
 .gc-resize:hover::before {
@@ -3923,11 +3923,10 @@ a:hover {
   align-items: center;
   justify-content: space-between;
   border-bottom: 2px solid var(--rule-soft);
-  padding: 0 6px 0 4px;
+  padding: 0 14px 0 4px;
 }
 .gc-tabs {
   display: flex;
-  margin-left: 10px;
 }
 .gc-tabs button {
   position: relative;
@@ -4030,6 +4029,22 @@ a:hover {
   color: var(--gray);
   text-align: center;
   padding: 2px 0;
+}
+.gc-hint {
+  font-size: 12px;
+  color: var(--gray);
+  text-align: center;
+  padding: 0 8px 5px;
+}
+.gc-hint kbd,
+.gc-kbd {
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--rule-soft);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0 5px;
 }
 .gc-form {
   display: flex;
@@ -4172,7 +4187,7 @@ a:hover {
 }
 @media (max-width: 600px) {
   .gc {
-    right: 8px;
+    left: 8px;
     bottom: 8px;
     --gc-w: min(268px, calc(100vw - 16px));
   }
@@ -4539,12 +4554,12 @@ body {
 
 .gt-stack {
   position: fixed;
-  left: 16px;
+  right: 16px;
   bottom: 16px;
   z-index: 900;
   display: flex;
   flex-direction: column-reverse;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: 6px;
   pointer-events: none;
 }
@@ -4573,7 +4588,7 @@ body {
 }
 @media (max-width: 600px) {
   .gt-stack {
-    left: 10px;
+    right: 10px;
     bottom: 10px;
   }
   .gt-item {
@@ -5737,17 +5752,17 @@ html {
 }
 @keyframes m-toast-in {
   from {
-    translate: -110% 0;
+    translate: 110% 0;
     scale: 0.7;
-    rotate: -12deg;
+    rotate: 12deg;
   }
 }
 @keyframes m-toast-out {
   to {
     opacity: 0;
-    translate: -40px 0;
+    translate: 40px 0;
     scale: 0.8;
-    rotate: -6deg;
+    rotate: 6deg;
   }
 }
 .gt-pts {

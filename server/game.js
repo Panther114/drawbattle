@@ -108,6 +108,7 @@ const CHAT_BURST = 5; // messages allowed per CHAT_WINDOW_MS per player
 const CHAT_WINDOW_MS = 8000;
 const MIN_VOTE_PLAYERS = 3; // a vote kick needs at least this many active players
 const MIN_RANDOM_PLAYERS = 4; // random teams need 2 + 2
+const READY_COOLDOWN_MS = 1000;
 const PRESENCE_BURST = 8; // presence changes allowed per PRESENCE_WINDOW_MS per player
 const PRESENCE_WINDOW_MS = 10000;
 const MAX_RATING = 99999;
@@ -246,11 +247,13 @@ export class Game {
       hideWordLength: false,
       streamerMode: !!streamerMode,
       wordListId,
+      allowLateJoin: true,
     };
     this.nextGameId = undefined;
     this.sockets = new Map(); // userId -> Set<ws>
     this.spectators = new Set();
     this.ready = new Set();
+    this.readyToggledAt = new Map(); // userId -> time of the last ready / unready click
     this.timers = new Set();
     this.lobbyTimers = new Map();
     this.createdAt = Date.now();
@@ -1174,9 +1177,15 @@ export class Game {
 
   onReadyUp(userId, roundIndex) {
     if (!this.currentRound || roundIndex !== this.previousRounds.length) return;
-    if (this.ready.has(userId)) return;
-    this.ready.add(userId);
-    if (this.allReady()) return this.advance();
+    // clicking again takes the ready back; one click a second so it cannot be spammed
+    const now = this.now();
+    if (now - (this.readyToggledAt.get(userId) ?? -Infinity) < READY_COOLDOWN_MS) return;
+    this.readyToggledAt.set(userId, now);
+    if (this.ready.has(userId)) this.ready.delete(userId);
+    else {
+      this.ready.add(userId);
+      if (this.allReady()) return this.advance();
+    }
     this.broadcast([S.ReadyUp, roundIndex, [...this.ready]]);
   }
 

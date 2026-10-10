@@ -850,3 +850,31 @@ test('a custom pack can be shared with everyone, within tight limits', () => {
   assert.match(shareGlobal(110943).error, /not found/, 'the official pack is not a custom pack');
   assert.ok(getWordListMeta(meta.id));
 });
+
+// ---- unready ----
+test('clicking ready again takes it back, at most once a second', () => {
+  const g = makeGame();
+  const ws = lobby(g, 6);
+  startGame(g, ws);
+  toScoreScreen(g);
+  let t = Date.now();
+  g.now = () => t;
+  send(g, ws.p1, C.ReadyUp, 0);
+  assert.ok(g.ready.has('p1'));
+  t += 300;
+  send(g, ws.p1, C.ReadyUp, 0);
+  assert.ok(g.ready.has('p1'), 'a second click inside the cooldown is ignored');
+  t += 800;
+  send(g, ws.p1, C.ReadyUp, 0);
+  assert.ok(!g.ready.has('p1'), 'unreadied');
+  assert.deepEqual(ws.p2.last(S.ReadyUp).slice(1), [0, []], 'everybody is told');
+  t += 1100;
+  send(g, ws.p1, C.ReadyUp, 0);
+  assert.ok(g.ready.has('p1'), 'ready again');
+});
+
+test('a new game allows joining mid-game by default', () => {
+  const g = new Game('dflt', {});
+  assert.equal(g.settings.allowLateJoin, true);
+  g.destroy();
+});

@@ -273,7 +273,7 @@ function submitGuess() {
                 ref="guessInput"
                 v-model="guess"
                 type="text"
-                placeholder="type your guess..."
+                placeholder="type your guess... (/ for chat)"
                 class="mp-guess-input"
                 spellcheck="false"
                 autocapitalize="off"

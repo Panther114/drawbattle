@@ -82,7 +82,8 @@ function reset() {
       <div v-if="s.recent.length === 0" class="stt-empty">no finished games yet. go play one!</div>
       <div v-for="g in s.recent" :key="g.k" class="stt-row">
         <span class="stt-result" :class="g.result">{{ label[g.result] }}</span>
-        <span class="stt-score">{{ g.mine }} – {{ g.theirs }}</span>
+        <span v-if="g.mine !== undefined" class="stt-score">{{ g.mine }} – {{ g.theirs }}</span>
+        <span v-else class="stt-score" title="recovered from the saved rounds, the final score is unknown">recovered</span>
         <span v-if="deltaOf(g) !== undefined" class="stt-delta" :class="signClass(deltaOf(g))" title="player score change">{{ formatDelta(deltaOf(g)) }}</span>
         <span v-if="g.mark" class="pf-mark" :class="'pf-' + g.mark" title="team performance">{{ g.mark }}</span>
         <span class="stt-date">{{ when(g.t) }}</span>
