@@ -644,6 +644,10 @@ watch(roundStage, (stage) => {
   recordRoundAt(g.previousRounds.length, [...g.previousRounds, currentRound.value]);
 });
 watch(() => game.value?.previousRounds.length, recordFinishedRounds);
+// who was in the game, by team: 0 = mine, 1 = the other side
+function playersOf(g) {
+  return g.teams.flatMap((t, i) => t.userIds.map((id) => [g.users[id]?.name || 'anonymous', i === teamIndex.value ? 0 : 1]));
+}
 function recordFinish() {
   const g = game.value;
   if (g === undefined || !isPlayer.value || g.previousRounds.length === 0) return;
@@ -651,7 +655,7 @@ function recordFinish() {
   const totals = totalScores(g.previousRounds, g.finalRound);
   const mine = totals[teamIndex.value];
   const theirs = totals[1 - teamIndex.value];
-  recordGame(gameKey.value, mine > theirs ? 'win' : mine < theirs ? 'loss' : 'draw', mine, theirs, teamPerformance(g.previousRounds, teamIndex.value, g.settings.roundLengthSec)?.mark);
+  recordGame(gameKey.value, mine > theirs ? 'win' : mine < theirs ? 'loss' : 'draw', mine, theirs, teamPerformance(g.previousRounds, teamIndex.value, g.settings.roundLengthSec)?.mark, playersOf(g));
   recordMatch(buildFacts(g, gameKey.value), userId.value);
 }
 

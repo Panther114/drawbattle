@@ -8,7 +8,7 @@ const KEY = 'drawbattle.stats.v1';
 const MAX_GAMES = 300;
 const storage = safeStorage('local');
 
-// games: [{ k: game key, t: first seen (ms), r: [[roundIndex, 'd' | 'g', won 0/1, points gained - points lost]], done, result: 'win' | 'loss' | 'draw', mine, theirs, mark }]
+// games: [{ k: game key, t: first seen (ms), r: [[roundIndex, 'd' | 'g', won 0/1, points gained - points lost]], done, result: 'win' | 'loss' | 'draw', mine, theirs, mark, players: [[name, 0 my team | 1 other team]] (players only for games saved since they were added) }]
 function load() {
   try {
     const parsed = JSON.parse(storage?.getItem(KEY) ?? 'null');
@@ -50,7 +50,7 @@ export function recordRound(key, roundIndex, role, won, net = 0) {
 }
 
 // a finished game: result is 'win' | 'loss' | 'draw'
-export function recordGame(key, result, mine, theirs, mark = undefined) {
+export function recordGame(key, result, mine, theirs, mark = undefined, players = undefined) {
   const g = entry(key);
   if (g.done) return false;
   g.done = true;
@@ -58,6 +58,7 @@ export function recordGame(key, result, mine, theirs, mark = undefined) {
   g.mine = mine;
   g.theirs = theirs;
   g.mark = mark;
+  if (players) g.players = players;
   g.t = Date.now();
   save();
   return true;

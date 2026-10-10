@@ -6540,3 +6540,12 @@ input[type='checkbox']:not(:disabled):active {
 .stt-rd-n {
   color: var(--gray);
 }
+.stt-players {
+  flex-basis: 100%;
+  font-size: 13px;
+  color: var(--gray);
+  padding-bottom: 6px;
+}
+.stt-side {
+  display: block;
+}
