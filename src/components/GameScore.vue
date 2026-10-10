@@ -18,7 +18,6 @@ import { track } from '../analytics.js';
 import { useKeys } from '../keys.js';
 import Btn from './Btn.vue';
 import IconWithText from './IconWithText.vue';
-import KeyHint from './KeyHint.vue';
 import TeamBoard from './TeamBoard.vue';
 import Username from './Username.vue';
 
@@ -121,7 +120,6 @@ function skipReveal() {
 useKeys([
   { key: 'enter', when: () => stage.value !== Stage.Recap && !props.isSpectator, run: skipReveal },
   { key: 'enter', when: () => stage.value === Stage.Recap && !props.isSpectator && props.canReady, run: ready },
-  { key: 'f', when: () => stage.value === Stage.Recap && !props.isSpectator && showForce.value, run: forceStart },
 ]);
 
 // ---- derived display data ----
@@ -235,7 +233,7 @@ void drawingStartTime;
         <template v-if="!isSpectator">
           <Btn :disabled="!canReady" :icon="iAmReady ? 'check' : 'next'" :title="iAmReady ? 'click to cancel' : undefined" hint="enter" @click="ready">{{ iAmReady ? 'waiting... (click to cancel)' : lastNoFinal ? 'see results' : 'continue' }}</Btn>
           <button v-if="showForce" class="sc-force-start" @click="forceStart">
-            {{ lastNoFinal ? 'show the final results' : `start ${isLastRound ? 'final drawdown' : 'next round'}` }}<KeyHint k="f" />
+            {{ lastNoFinal ? 'show the final results' : `start ${isLastRound ? 'final drawdown' : 'next round'}` }}
           </button>
           <div class="sc-continue-spacer" />
         </template>

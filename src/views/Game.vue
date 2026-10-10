@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { onBeforeRouteLeave, useRouter } from 'vue-router';
 import {
   C,
   FINAL_PRE_START_SEC,
@@ -766,18 +766,34 @@ const canEndVote = computed(
     ['round', 'score', 'final'].includes(view.value),
 );
 
-// ---- keyboard ----
+// ---- leaving: every way out of a game I am playing (Esc, the leave icon, a nav link) asks first ----
 const confirmLeave = ref(false);
+const askBeforeLeaving = computed(() => isConnected.value && !isSpectator.value && view.value !== 'summary' && view.value !== 'empty');
+let leaveTo;
+let leaveConfirmed = false;
+onBeforeRouteLeave((to) => {
+  // (no socket: the server sent us away, or the game is over; nothing to ask)
+  if (leaveConfirmed || socket === undefined || !askBeforeLeaving.value) return true;
+  leaveTo = to.fullPath;
+  confirmLeave.value = true;
+  return false;
+});
 function leaveGame() {
   confirmLeave.value = false;
-  router.push('/');
+  leaveConfirmed = true;
+  router.push(leaveTo ?? '/');
 }
+function cancelLeave() {
+  confirmLeave.value = false;
+  leaveTo = undefined;
+}
+
+// ---- keyboard ----
 useKeys([
-  { key: 'm', when: () => !isIOS(), run: () => (soundsEnabled.value = !soundsEnabled.value) },
-  { key: 'q', run: () => (confirmLeave.value = true) },
-  { key: 'v', when: () => canEndVote.value, run: () => send([C.VoteEnd]) },
+  // Esc comes last: a text box, a dialog, the wheel or the start countdown get it first
+  { key: 'esc', prio: Prio.fallback - 20, press: '.game-info', run: () => router.push('/') },
   // Enter jumps to the guess box when the screen has one (the chat takes it otherwise)
-  { key: 'enter', prio: Prio.fallback + 5, run: focusGuess },
+  { key: 'enter', prio: Prio.fallback + 5, press: false, run: focusGuess },
 ]);
 
 const view = computed(() => {
@@ -833,7 +849,7 @@ const react = (i) => send([C.Reaction, i]);
       <div v-if="game && game.connectedAppInfo === undefined" class="game-info-row">
         <span>game {{ game.settings.streamerMode ? '****' : gameId.toUpperCase() }}</span>
         <router-link v-tooltip="'leave game'" to="/" class="leave-link" aria-label="leave game" />
-        <KeyHint k="q" />
+        <KeyHint k="esc" />
       </div>
       <div v-if="canEndVote" class="game-info-row">
         <button
@@ -843,17 +859,15 @@ const react = (i) => send([C.Reaction, i]);
           :class="{ mine: endMine, hot: endYes > 0 }"
           @click="send([C.VoteEnd])"
         >
-          {{ endMine ? `ending: ${endYes}/${endNeeded}` : endYes > 0 ? `end game ${endYes}/${endNeeded}` : 'end game' }}<KeyHint k="v" />
+          {{ endMine ? `ending: ${endYes}/${endNeeded}` : endYes > 0 ? `end game ${endYes}/${endNeeded}` : 'end game' }}
         </button>
       </div>
       <div class="game-info-row">
         <template v-if="!isIOS()">
           <span>sounds</span>
           <SoundToggle class="sound-toggle-pos" :enabled="soundsEnabled" @toggle="soundsEnabled = !soundsEnabled" />
-          <KeyHint k="m" />
         </template>
         <ThemeToggle class="sound-toggle-pos" />
-        <KeyHint k="t" />
         <button v-tooltip="'keyboard shortcuts'" type="button" class="gi-keys" aria-label="keyboard shortcuts" @click="toggleHelp"><KeyHint k="?" /></button>
         <button v-if="qs.enabled" v-tooltip="'quick switch'" type="button" class="qs-trigger" aria-label="quick switch" @click="toggleQuick"><Icon name="bolt" /></button>
       </div>
@@ -874,7 +888,6 @@ const react = (i) => send([C.Reaction, i]);
       :users="game.users"
       :teams="game.teams"
       :can-late-join="game.settings.allowLateJoin !== false && lateRoom"
-      :pick-team="game.settings.lateJoinPickTeam === true"
       :max-team-size="game.settings.maxTeamSize ?? 8"
       :init-name="connectedUsername || previousGameUserName"
       @join-game="rejoinAs"
@@ -979,12 +992,13 @@ const react = (i) => send([C.Reaction, i]);
     />
     <ConfirmModal
       v-if="confirmLeave"
+      esc-confirms
       title="leave this game?"
       :text="view === 'summary' ? '' : 'you can come back with the same code while it lasts'"
       ok-label="leave"
       cancel-label="stay"
       @confirm="leaveGame"
-      @close-modal="confirmLeave = false"
+      @close-modal="cancelLeave"
     />
     <ReactionWheel v-if="game && isConnected && view !== 'empty' && view !== 'summary'" @react="react" />
     <FxLayer :urgent="gameFx.urgent.value" />

@@ -1,6 +1,7 @@
 <script setup>
 import { theme, toggleTheme } from '../theme.js';
 import Icon from './Icon.vue';
+import KeyHint from './KeyHint.vue';
 defineProps({ label: { type: Boolean, default: false } });
 </script>
 
@@ -15,5 +16,6 @@ defineProps({ label: { type: Boolean, default: false } });
   >
     <Icon :key="theme.dark ? 'sun' : 'moon'" :name="theme.dark ? 'sun' : 'moon'" class="theme-icon" />
     <span v-if="label">{{ theme.dark ? 'light mode' : 'dark mode' }}</span>
+    <KeyHint v-if="label" k="t" />
   </button>
 </template>

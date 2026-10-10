@@ -131,10 +131,8 @@ function onEnter() {
 }
 useKeys([
   { key: 'enter', run: onEnter },
-  { key: 'esc', when: () => starting.value && !props.isSpectator, run: cancelStart },
-  { key: 'n', when: () => nameInput.value !== undefined && !nameInput.value.disabled, run: () => nameInput.value.focus() },
-  { key: 's', when: () => !props.isConnected && !props.isSpectator, run: () => emit('spectate-game') },
-  ...[0, 1, 2, 3].map((ti) => ({ key: String(ti + 1), when: () => canJoinTeam(ti), run: () => joinTeam(ti) })),
+  { key: 'esc', press: '.lobby-cancel', when: () => starting.value && !props.isSpectator, run: cancelStart },
+  ...[0, 1].map((ti) => ({ key: String(ti + 1), when: () => canJoinTeam(ti), run: () => joinTeam(ti) })),
 ]);
 </script>
 
@@ -147,7 +145,6 @@ useKeys([
 
     <form v-if="!isSpectator" class="lobby-name-form" @submit.prevent="cleanName && emit('join-game', cleanName)">
       <label class="lobby-name-label" for="nameInput">my name is</label>
-      <KeyHint v-if="isConnected" k="n" />
       <input
         id="nameInput"
         ref="nameInput"
@@ -166,7 +163,6 @@ useKeys([
         </div>
         <div class="lobby-spectate-row">
           <a href="#" class="spectate-link" @click.prevent="emit('spectate-game')">join as spectator</a>
-          <KeyHint k="s" />
         </div>
       </template>
     </form>

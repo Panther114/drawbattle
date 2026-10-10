@@ -43,7 +43,7 @@ function reset() {
 
 <template>
   <div class="stt-root">
-    <TopNav><router-link to="/" class="nav-home"><Icon name="home" />back to home<KeyHint k="h" /></router-link></TopNav>
+    <TopNav><router-link to="/" class="nav-home"><Icon name="home" />back to home<KeyHint k="esc" /></router-link></TopNav>
     <div class="stt-title">my stats</div>
     <div class="stt-sub">kept only in this browser. nothing is sent to the server</div>
 

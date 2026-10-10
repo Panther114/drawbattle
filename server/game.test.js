@@ -812,8 +812,8 @@ test('somebody coming back within the grace period keeps the game going', () => 
 });
 
 // ---- joining a game in progress ----
-test('a late joiner picks their team when the lobby allows it', () => {
-  const { g } = playing(4, { lateJoinPickTeam: true });
+test('a late joiner picks their team', () => {
+  const { g } = playing(4);
   const a = new MockWs(g);
   g.connect(a, { userId: 'late1', userName: 'late1', team: 1 });
   assert.ok(ids(g, 1).includes('late1'));
@@ -822,11 +822,11 @@ test('a late joiner picks their team when the lobby allows it', () => {
   assert.ok(ids(g, 1).includes('late2'), 'team choice beats balance');
 });
 
-test('without the pick-a-team option a late joiner goes to the smaller team', () => {
+test('a late joiner without a team choice goes to the smaller team', () => {
   const { g } = playing(5);
   const smaller = ids(g, 0).length < ids(g, 1).length ? 0 : 1;
   const a = new MockWs(g);
-  g.connect(a, { userId: 'late1', userName: 'late1', team: 1 - smaller });
+  g.connect(a, { userId: 'late1', userName: 'late1' });
   assert.ok(ids(g, smaller).includes('late1'));
 });
 

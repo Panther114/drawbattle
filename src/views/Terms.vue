@@ -70,7 +70,7 @@ const privacy = [
 
 <template>
   <div class="tos-root">
-    <TopNav><router-link to="/" class="nav-home"><Icon name="home" />back to home<KeyHint k="h" /></router-link></TopNav>
+    <TopNav><router-link to="/" class="nav-home"><Icon name="home" />back to home<KeyHint k="esc" /></router-link></TopNav>
     <div>
       <h2 class="tos-header">Terms of Service</h2>
       <div v-for="(s, i) in terms" :key="i">

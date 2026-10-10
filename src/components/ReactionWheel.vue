@@ -51,7 +51,7 @@ const N = REACTIONS.length;
 // Alt+1..8 sends straight away, even from the guess box; R opens the wheel
 useKeys([
   ...REACTIONS.map((_, i) => ({ key: `alt+${i + 1}`, typing: true, run: () => send(i) })),
-  { key: 'r', run: toggle },
+  { key: 'r', press: '.rw', run: toggle },
 ]);
 // while the wheel is open it owns the keyboard
 let offModal;
@@ -64,11 +64,11 @@ watch(open, (o) => {
   };
   offModal = registerKeys(
     [
-      ...REACTIONS.map((_, i) => ({ key: String(i + 1), typing: true, run: () => send(i) })),
+      ...REACTIONS.map((_, i) => ({ key: String(i + 1), typing: true, press: '.rw-wheel', run: () => send(i) })),
       { key: ['right', 'down'], repeat: true, run: move(1) },
       { key: ['left', 'up'], repeat: true, run: move(-1) },
-      { key: ['enter', 'space'], force: true, run: () => (active.value >= 0 ? send(active.value) : close()) },
-      { key: ['esc', 'r', 'tab'], typing: true, run: close },
+      { key: ['enter', 'space'], force: true, press: false, run: () => (active.value >= 0 ? send(active.value) : close()) },
+      { key: ['esc', 'r', 'tab'], typing: true, press: false, run: close },
     ],
     { prio: Prio.modal, modal: true },
   );
@@ -118,6 +118,7 @@ onUnmounted(() => {
             @click="send(s.i)"
           >
             <ReactionFace :id="s.id" class="rw-item-face" />
+            <span class="rw-item-label">{{ s.label }}</span>
             <KeyHint :k="String(s.i + 1)" class="rw-item-key" />
           </button>
         </div>

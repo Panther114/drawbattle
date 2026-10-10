@@ -26,13 +26,12 @@ export const DEFAULT_RULES = {
   alwaysRotate: false, // the drawer always rotates, even after winning
   allowSpectators: true,
   allowLateJoin: true,
-  lateJoinPickTeam: false, // someone joining a game in progress picks their team (off: the smaller team)
   singleWordsOnly: false, // only offer words without spaces
   maxWordLength: 0, // only offer words up to this many characters (0 = any)
   finalDrawdown: true, // play the final drawdown after the last round (off: the game ends after the last round)
 };
 // rules shown right in the lobby settings (not in the "customize rules" dialog)
-export const LOBBY_RULES = ['headStart', 'alwaysRotate', 'allowLateJoin', 'lateJoinPickTeam'];
+export const LOBBY_RULES = ['headStart', 'alwaysRotate', 'allowLateJoin'];
 export const rules = reactive({ ...DEFAULT_RULES });
 export function applyRules(settings) {
   for (const k of Object.keys(DEFAULT_RULES)) {

@@ -86,7 +86,7 @@ function onEvent(kind, d) {
       // a gentle sideways scatter so several reactions at once do not stack on top of each other
       const x = ((seq * 37) % 5) - 2;
       reactions.value = [...reactions.value.slice(-5), { id, r, name: d.name, team: d.team, mine: d.mine, x }];
-      later(() => drop(reactions, id), 2800);
+      later(() => drop(reactions, id), 4200);
       sfx('pop');
       break;
     }

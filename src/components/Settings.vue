@@ -36,7 +36,6 @@ const rulesOpen = ref(false);
 const headStart = ref(props.gameSettings.headStart !== false);
 const alwaysRotate = ref(props.gameSettings.alwaysRotate === true);
 const allowLateJoin = ref(props.gameSettings.allowLateJoin !== false);
-const lateJoinPickTeam = ref(props.gameSettings.lateJoinPickTeam === true);
 const changedRules = computed(
   () =>
     Object.keys(DEFAULT_RULES).filter(
@@ -70,7 +69,6 @@ const current = () => ({
   headStart: headStart.value,
   alwaysRotate: alwaysRotate.value,
   allowLateJoin: allowLateJoin.value,
-  lateJoinPickTeam: lateJoinPickTeam.value,
 });
 
 function changeRounds(e) {
@@ -129,12 +127,6 @@ function changeLateJoin(e) {
   allowLateJoin.value = v;
   send({ ...current(), allowLateJoin: v });
 }
-function changePickTeam(e) {
-  const v = e.target.checked;
-  track('change game setting', { 'game id': props.gameId, key: 'lateJoinPickTeam', value: v });
-  lateJoinPickTeam.value = v;
-  send({ ...current(), lateJoinPickTeam: v });
-}
 
 async function copyLink() {
   const text = `${window.location.protocol}//${inviteLink.value}`;
@@ -176,7 +168,6 @@ watch(
     headStart.value = s.headStart !== false;
     alwaysRotate.value = s.alwaysRotate === true;
     allowLateJoin.value = s.allowLateJoin !== false;
-    lateJoinPickTeam.value = s.lateJoinPickTeam === true;
   },
 );
 // keep the round count legal whenever the pack changes
@@ -195,29 +186,16 @@ watch(wordListId, (id) => {
   if (!isStandardPack(id)) customPack.value = id;
 });
 
-// ---- keyboard: a key per setting, shown on its row ----
+// ---- keyboard: the lobby toggles sit on 3-8 (1 and 2 join a team), in the order they are listed ----
 const flip = (state, change) => () => change({ target: { checked: !state.value } });
 const editable = () => !props.disabled;
 useKeys([
-  { key: 'i', run: copyLink },
-  { key: 'u', run: () => (rulesOpen.value = true) },
-  {
-    key: 'w',
-    when: editable,
-    run: () => {
-      modalOpen.value = true;
-      track('open word pack modal', { 'game id': props.gameId });
-    },
-  },
-  { key: 'o', when: () => editable() && maxRounds.value >= 1, run: () => roundsInput.value?.focus() },
-  { key: 'e', when: editable, run: () => lengthInput.value?.focus() },
-  { key: 'l', when: editable, run: flip(showWordLength, changeShowLength) },
-  { key: 'd', when: editable, run: flip(finalDrawdown, changeFinal) },
-  { key: 'x', when: editable, run: flip(randomTeams, changeRandom) },
-  { key: 'h', when: editable, run: flip(headStart, changeHeadStart) },
-  { key: 'a', when: editable, run: flip(alwaysRotate, changeRotate) },
-  { key: 'j', when: editable, run: flip(allowLateJoin, changeLateJoin) },
-  { key: 'k', when: () => editable() && allowLateJoin.value, run: flip(lateJoinPickTeam, changePickTeam) },
+  { key: '3', when: editable, run: flip(showWordLength, changeShowLength) },
+  { key: '4', when: editable, run: flip(finalDrawdown, changeFinal) },
+  { key: '5', when: editable, run: flip(randomTeams, changeRandom) },
+  { key: '6', when: editable, run: flip(headStart, changeHeadStart) },
+  { key: '7', when: editable, run: flip(alwaysRotate, changeRotate) },
+  { key: '8', when: editable, run: flip(allowLateJoin, changeLateJoin) },
 ]);
 
 const listIds = computed(() => {
@@ -240,7 +218,7 @@ const listIds = computed(() => {
             class="st-invite-input"
             @focus="(e) => e.target.select()"
           />
-          <button class="st-copy-button" @click="copyLink">{{ copied ? 'copied!' : 'copy' }}<KeyHint k="i" /></button>
+          <button class="st-copy-button" @click="copyLink">{{ copied ? 'copied!' : 'copy' }}</button>
         </div>
       </div>
     </div>
@@ -265,7 +243,7 @@ const listIds = computed(() => {
             track('open word pack modal', { 'game id': gameId });
           "
         >
-          <div>browse all packs<KeyHint k="w" /></div>
+          <div>browse all packs</div>
           <div class="wp-description">or select a custom word pack!</div>
         </button>
       </div>
@@ -289,7 +267,6 @@ const listIds = computed(() => {
               @keydown.enter.prevent="$event.target.blur()"
             />
             <div>{{ gameSettings.finalDrawdown === false ? 'rounds' : 'rounds + the final drawdown' }}</div>
-            <KeyHint k="o" />
           </div>
           <div v-else class="st-item st-not-enough-words">word pack needs more words!</div>
           <div class="st-item">
@@ -307,11 +284,10 @@ const listIds = computed(() => {
               @keydown.enter.prevent="$event.target.blur()"
             />
             <div>seconds per round</div>
-            <KeyHint k="e" />
           </div>
           <div class="st-item">
             <label for="showWordLength" class="st-checkbox-label">show word lengths</label>
-            <KeyHint k="l" />
+            <KeyHint k="3" />
             <input
               id="showWordLength"
               type="checkbox"
@@ -322,42 +298,31 @@ const listIds = computed(() => {
           </div>
           <div class="st-item">
             <label for="finalDrawdown" class="st-checkbox-label">play the final drawdown</label>
-            <KeyHint k="d" />
+            <KeyHint k="4" />
             <input id="finalDrawdown" type="checkbox" :checked="finalDrawdown" :disabled="disabled" @change="changeFinal" />
           </div>
           <div class="st-item">
             <label for="randomTeams" class="st-checkbox-label">random teams</label>
-            <KeyHint k="x" />
+            <KeyHint k="5" />
             <input id="randomTeams" type="checkbox" :checked="randomTeams" :disabled="disabled" @change="changeRandom" />
           </div>
           <div class="st-item">
             <label for="headStart" class="st-checkbox-label">head start for the losing team</label>
-            <KeyHint k="h" />
+            <KeyHint k="6" />
             <input id="headStart" type="checkbox" :checked="headStart" :disabled="disabled" @change="changeHeadStart" />
           </div>
           <div class="st-item">
             <label for="alwaysRotate" class="st-checkbox-label">drawers always rotate</label>
-            <KeyHint k="a" />
+            <KeyHint k="7" />
             <input id="alwaysRotate" type="checkbox" :checked="alwaysRotate" :disabled="disabled" @change="changeRotate" />
           </div>
           <div class="st-item">
             <label for="allowLateJoin" class="st-checkbox-label">allow joining mid-game</label>
-            <KeyHint k="j" />
+            <KeyHint k="8" />
             <input id="allowLateJoin" type="checkbox" :checked="allowLateJoin" :disabled="disabled" @change="changeLateJoin" />
           </div>
-          <div v-if="allowLateJoin" class="st-item">
-            <label for="lateJoinPickTeam" class="st-checkbox-label">late joiners pick their team</label>
-            <KeyHint k="k" />
-            <input
-              id="lateJoinPickTeam"
-              type="checkbox"
-              :checked="lateJoinPickTeam"
-              :disabled="disabled"
-              @change="changePickTeam"
-            />
-          </div>
           <div class="st-item">
-            <button class="st-rules-button" @click="rulesOpen = true">customize rules...<KeyHint k="u" /></button>
+            <button class="st-rules-button" @click="rulesOpen = true">customize rules...</button>
             <span v-if="changedRules > 0" class="st-rules-changed">{{ changedRules }} changed</span>
           </div>
         </div>

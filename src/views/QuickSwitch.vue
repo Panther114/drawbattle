@@ -54,7 +54,7 @@ function test() {
 
 <template>
   <div class="stt-root qsw-root">
-    <TopNav><router-link to="/" class="nav-home"><Icon name="home" />back to home<KeyHint k="h" /></router-link></TopNav>
+    <TopNav><router-link to="/" class="nav-home"><Icon name="home" />back to home<KeyHint k="esc" /></router-link></TopNav>
     <div class="stt-title">quick switch</div>
     <div class="stt-sub">a hotkey that instantly covers the game with a page you pick. kept only in this browser</div>
 

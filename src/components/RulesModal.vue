@@ -1,9 +1,7 @@
 <script setup>
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive } from 'vue';
 import { DEFAULT_RULES, LOBBY_RULES } from '../shared.js';
 import { safeStorage } from '../storage.js';
-import { Prio, useKeys } from '../keys.js';
-import KeyHint from './KeyHint.vue';
 import Modal from './Modal.vue';
 
 const props = defineProps({
@@ -119,33 +117,6 @@ function selectFrom(e, item) {
   const opt = item.options.find((o) => String(o.v) === raw);
   set(item.key, opt ? opt.v : raw);
 }
-// ---- keyboard: up / down walk through the rules, Space ticks a box, 1-4 are the presets ----
-const root = ref();
-let at = -1; // the field the walk was last at, also after it lost focus
-const fieldList = () => [...(root.value?.querySelectorAll('input:not([disabled]), select:not([disabled])') ?? [])];
-const noteFocus = (e) => {
-  const i = fieldList().indexOf(e.target);
-  if (i >= 0) at = i;
-};
-function walk(d) {
-  const el = document.activeElement;
-  if (el?.tagName === 'SELECT' || el?.type === 'number') return false; // those use the arrows themselves
-  const fields = fieldList();
-  if (fields.length === 0) return false;
-  at = Math.min(fields.length - 1, Math.max(0, at + d));
-  fields[at].focus();
-}
-useKeys(
-  [
-    { key: 'down', typing: true, run: () => walk(1) },
-    { key: 'up', typing: true, run: () => walk(-1) },
-    // Enter lets go of a drop-down (the number boxes do the same on their own)
-    { key: 'enter', typing: true, when: () => document.activeElement?.tagName === 'SELECT', run: () => document.activeElement.blur() },
-    ...Object.values(PRESETS).map((p, i) => ({ key: String(i + 1), when: () => !props.disabled, run: () => applyPreset(p) })),
-  ],
-  { prio: Prio.overlay, modal: true },
-);
-
 // whole numbers only, clamped into the rule's range; a bad entry snaps back to the current value
 function numFrom(e, item) {
   const n = Math.round(Number(e.target.value));
@@ -157,12 +128,12 @@ function numFrom(e, item) {
 
 <template>
   <Modal @close-modal="emit('close-modal')">
-    <div ref="root" class="rm-root" @focusin="noteFocus">
+    <div class="rm-root">
       <div class="rm-title">customize rules</div>
       <div class="rm-presets">
         <span class="rm-presets-label">presets</span>
         <button v-for="(p, k, i) in PRESETS" :key="k" class="rm-preset" :disabled="disabled" @click="applyPreset(p)">
-          {{ p.label }}<KeyHint v-if="!disabled" :k="String(i + 1)" />
+          {{ p.label }}
         </button>
       </div>
       <div v-for="g in GROUPS" :key="g.title" class="rm-group">

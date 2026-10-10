@@ -127,7 +127,6 @@ useKeys([
   { key: 'enter', when: () => recapShown.value && props.showBackToLobby, run: backToLobby },
   { key: 'left', when: () => recapShown.value, run: () => stepWord(-1) },
   { key: 'right', when: () => recapShown.value, run: () => stepWord(1) },
-  { key: 'g', when: () => recapShown.value && recapWords.value.length > 0, run: () => setGuesses(!showGuesses.value) },
 ]);
 
 if (props.game.previousRounds[0]?.teamStates[0]?.canvasOperations === undefined) props.fetchFullGame();
@@ -249,7 +248,7 @@ const why = (r) => {
             />
           </div>
           <div class="sm-show-guesses-row">
-            <label class="sm-show-guesses-label" for="showGuesses">show guesses <KeyHint k="g" /></label>
+            <label class="sm-show-guesses-label" for="showGuesses">show guesses</label>
             <input id="showGuesses" type="checkbox" :checked="showGuesses" @change="toggleGuesses" />
           </div>
         </div>

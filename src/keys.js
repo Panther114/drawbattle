@@ -7,10 +7,12 @@
 // - run(e): do the thing. Returning false means "not mine after all": the next binding gets a go, then the browser
 // - when(e): skip this binding while it returns false
 // - typing: true to also fire while a text field has focus (single keys are ignored there by default)
+// - press: where the key's tile sits, so the matching control looks pressed (a selector; false for none)
 // - the highest prio wins; among equals the binding registered last wins. A registration with { modal: true } shuts
 //   every non-modal binding off while it exists (dialogs)
 import { computed, getCurrentScope, onScopeDispose, reactive } from 'vue';
 import { qs } from './quickswitch.js';
+import { pressByKey } from './fx/press.js';
 
 export const Prio = { fallback: 0, page: 10, overlay: 20, panel: 30, modal: 100 };
 
@@ -62,6 +64,19 @@ function matches(s, e) {
   return s.alnum || s.k.length > 1 ? e.shiftKey === s.shift : true; // symbols such as ? and / already include shift
 }
 
+// the name a key tile uses for a key press (<KeyHint k="..."> writes the same name into data-k)
+const TILE_NAMES = { escape: 'esc', ' ': 'space', arrowleft: 'left', arrowright: 'right', arrowup: 'up', arrowdown: 'down' };
+export function tileName(k) {
+  const low = String(k).toLowerCase();
+  return TILE_NAMES[low] ?? low;
+}
+function keyName(e) {
+  const code = e.code ?? '';
+  // letters by position, so a tile reads the same on any layout
+  if (code.startsWith('Key') && !/^[\x00-\x7f]$/.test(e.key)) return code.slice(3).toLowerCase();
+  return tileName(e.key);
+}
+
 // ---- registry ----
 let seq = 0;
 const regs = [];
@@ -109,6 +124,7 @@ function onKeyDown(e) {
     if (f.b.when && f.b.when(e) === false) continue;
     if (f.b.run(e) === false) continue;
     e.preventDefault();
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) pressByKey(keyName(e), f.b.press);
     return;
   }
 }
@@ -119,6 +135,7 @@ registerKeys(
     {
       key: 'esc',
       typing: true,
+      press: false,
       run: () => {
         const el = document.activeElement;
         if (!el || el === document.body) return false;
@@ -157,72 +174,29 @@ export function registerHelp(entries) {
 
 const CATALOG = [
   { id: 'help', group: 'everywhere', keys: ['?'], label: 'this sheet' },
-  { id: 'esc', group: 'everywhere', keys: ['Esc'], label: 'leave the box you are typing in' },
-  { id: 'theme', group: 'everywhere', keys: ['T'], label: 'dark / light theme' },
-  { id: 'sound', group: 'everywhere', keys: ['M'], label: 'sounds on / off (in a game)' },
-  { id: 'leave', group: 'everywhere', keys: ['Q'], label: 'leave the game (asks first)' },
-  { id: 'home', group: 'everywhere', keys: ['H'], label: 'back to the home page' },
+  { id: 'esc', group: 'everywhere', keys: ['Esc'], label: 'close a dialog or the chat, leave a box, go back. leaving a game asks first: Esc again leaves, ↵ stays' },
+  { id: 'theme', group: 'everywhere', keys: ['T'], label: 'dark / light mode' },
+  { id: 'stats', group: 'everywhere', keys: ['S'], label: 'my stats' },
 
-  { id: 'home.new', group: 'home', keys: ['N'], label: 'new game, pick a code' },
+  { id: 'home.new', group: 'home', keys: ['N'], label: 'new game' },
   { id: 'home.join', group: 'home', keys: ['J'], label: 'type a game code' },
-  { id: 'home.go', group: 'home', keys: ['↵'], label: 'create / join (in the code boxes)' },
-  { id: 'home.preview', group: 'home', keys: ['P'], label: 'preview the word pack' },
-  { id: 'home.links', group: 'home', keys: ['L', 'W'], label: 'lobbies, word pack editor' },
-  { id: 'nav.links', group: 'home', keys: ['S', 'Z', 'G'], label: 'my stats, quick switch, github' },
-  { id: 'lobbies.join', group: 'home', keys: ['1–9'], label: 'lobbies page: join a game' },
-  { id: 'lobbies.spectate', group: 'home', keys: ['Shift+1–9'], label: 'lobbies page: spectate it' },
 
   { id: 'lobby.go', group: 'lobby', keys: ['↵'], label: 'join, then start the game' },
-  { id: 'lobby.team', group: 'lobby', keys: ['1–2'], label: 'join a team (switch teams)' },
-  { id: 'lobby.cancel', group: 'lobby', keys: ['Esc'], label: 'cancel the start countdown' },
-  { id: 'lobby.name', group: 'lobby', keys: ['N'], label: 'change your name' },
-  { id: 'lobby.spectate', group: 'lobby', keys: ['S'], label: 'join as a spectator' },
-  { id: 'lobby.invite', group: 'lobby', keys: ['I'], label: 'copy the invite link' },
-  { id: 'lobby.packs', group: 'lobby', keys: ['W'], label: 'browse word packs' },
-  { id: 'lobby.rules', group: 'lobby', keys: ['U'], label: 'customize rules' },
-  { id: 'lobby.rejoin', group: 'lobby', keys: ['1–9'], label: 'game in progress: rejoin as' },
-  { id: 'lobby.pick', group: 'lobby', keys: ['A', 'B'], label: 'game in progress: pick a team' },
+  { id: 'lobby.team', group: 'lobby', keys: ['1', '2'], label: 'join team 1 / team 2' },
+  { id: 'lobby.settings', group: 'lobby', keys: ['3–8'], label: 'flip the setting with that number' },
 
-  { id: 'settings.num', group: 'lobby settings', keys: ['O', 'E'], label: 'rounds, seconds per round' },
-  { id: 'settings.length', group: 'lobby settings', keys: ['L'], label: 'show word lengths' },
-  { id: 'settings.final', group: 'lobby settings', keys: ['D'], label: 'final drawdown' },
-  { id: 'settings.random', group: 'lobby settings', keys: ['X'], label: 'random teams' },
-  { id: 'settings.head', group: 'lobby settings', keys: ['H'], label: 'head start' },
-  { id: 'settings.rotate', group: 'lobby settings', keys: ['A'], label: 'drawers always rotate' },
-  { id: 'settings.late', group: 'lobby settings', keys: ['J', 'K'], label: 'mid-game joins, late joiners pick' },
-
-  { id: 'round.word', group: 'in a round', keys: ['1–4'], label: 'choose a word' },
-  { id: 'round.guess', group: 'in a round', keys: ['↵'], label: 'type a guess; ↵ again sends it' },
-  { id: 'round.swap', group: 'in a round', keys: ['/'], label: 'swap between guess box and chat' },
-  { id: 'round.end', group: 'in a round', keys: ['V'], label: 'vote to end the game' },
-
-  { id: 'score.ready', group: 'after a round', keys: ['↵'], label: 'ready up / take it back' },
-  { id: 'score.force', group: 'after a round', keys: ['F'], label: 'start without waiting' },
-
-  { id: 'chat.toggle', group: 'chat & players', keys: ['C'], label: 'open / close the chat' },
-  { id: 'chat.focus', group: 'chat & players', keys: ['/'], label: 'write in the chat' },
-  { id: 'chat.players', group: 'chat & players', keys: ['P'], label: 'players tab' },
-  { id: 'chat.switch', group: 'chat & players', keys: ['S', 'Y'], label: 'ask to switch teams, agree' },
-  { id: 'chat.kick', group: 'chat & players', keys: ['1–9'], label: 'votekick (players tab)' },
-
-  { id: 'summary.back', group: 'summary', keys: ['↵'], label: 'back to the lobby' },
-  { id: 'summary.words', group: 'summary', keys: ['←', '→'], label: 'previous / next word' },
-  { id: 'summary.guesses', group: 'summary', keys: ['G'], label: 'show guesses' },
-
-  { id: 'dialog.close', group: 'dialogs', keys: ['Esc'], label: 'close' },
-  { id: 'dialog.ok', group: 'dialogs', keys: ['↵'], label: 'confirm' },
-  { id: 'dialog.tabs', group: 'dialogs', keys: ['←', '→'], label: 'word packs: switch tab' },
-  { id: 'dialog.packs', group: 'dialogs', keys: ['1–9', 'C'], label: 'word packs: pick, custom id' },
-  { id: 'dialog.move', group: 'dialogs', keys: ['↑', '↓'], label: 'rules: move between rules' },
-  { id: 'dialog.presets', group: 'dialogs', keys: ['1–4'], label: 'rules: presets' },
+  { id: 'round.word', group: 'playing', keys: ['1–4'], label: 'choose a word' },
+  { id: 'round.guess', group: 'playing', keys: ['↵'], label: 'jump into the guess box (or the chat)' },
+  { id: 'round.swap', group: 'playing', keys: ['/'], label: 'swap between guess box and chat' },
+  { id: 'score.ready', group: 'playing', keys: ['↵'], label: 'after a round: ready up' },
+  { id: 'summary.words', group: 'playing', keys: ['←', '→'], label: 'game recap: previous / next word' },
 
   // the reaction wheel (in a game) registers the real bindings
   { id: 'reactions.wheel', group: 'reactions', keys: ['R'], label: 'open / close the reaction wheel' },
-  { id: 'reactions.pick', group: 'reactions', keys: ['1–8', '←', '→', '↵'], label: 'in the wheel: send, move, send highlighted' },
+  { id: 'reactions.pick', group: 'reactions', keys: ['1–8'], label: 'in the wheel: send that reaction' },
   { id: 'reactions.quick', group: 'reactions', keys: ['Alt+1–8'], label: 'send a reaction at once, even while typing' },
-  { id: 'reactions.skip', group: 'reactions', keys: ['Esc', '↵'], label: 'skip the start / game over animation' },
 ];
-const GROUP_ORDER = ['everywhere', 'home', 'lobby', 'lobby settings', 'in a round', 'after a round', 'chat & players', 'summary', 'dialogs', 'reactions'];
+const GROUP_ORDER = ['everywhere', 'home', 'lobby', 'playing', 'reactions'];
 
 export const helpGroups = computed(() => {
   const byId = new Map(CATALOG.map((e) => [e.id, e]));

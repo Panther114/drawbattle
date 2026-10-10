@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue';
 import { Prio, useKeys } from '../keys.js';
+import KeyHint from './KeyHint.vue';
 const props = defineProps({ wide: { type: Boolean, default: false }, confirmable: { type: Boolean, default: false } });
 const emit = defineEmits(['close-modal', 'confirm']);
 // play the exit animation before the parent removes the dialog
@@ -15,8 +16,8 @@ onUnmounted(() => clearTimeout(timer));
 // Esc closes, and Enter confirms in a dialog that asks something; no other key works while a dialog is open
 useKeys(
   [
-    { key: 'esc', typing: true, run: close },
-    { key: 'enter', when: () => props.confirmable, run: () => emit('confirm') },
+    { key: 'esc', typing: true, press: '.modal-body', run: close },
+    { key: 'enter', press: '.modal-body', when: () => props.confirmable, run: () => emit('confirm') },
   ],
   { prio: Prio.modal, modal: true },
 );
@@ -30,7 +31,10 @@ onUnmounted(() => document.body.classList.remove('body-modal-open'));
       <div class="modal-backdrop" @click="close" />
       <div class="modal-body" :class="{ wide }">
         <div class="modal-contents"><slot /></div>
-        <button type="button" class="modal-close" aria-label="close" @click="close" />
+        <div class="modal-close-wrap">
+          <KeyHint v-if="!confirmable" k="esc" />
+          <button type="button" class="modal-close" aria-label="close" @click="close" />
+        </div>
       </div>
     </div>
   </Teleport>

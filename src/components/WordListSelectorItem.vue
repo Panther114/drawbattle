@@ -1,6 +1,5 @@
 <script setup>
 import { packs } from '../wordpacks.js';
-import KeyHint from './KeyHint.vue';
 
 const props = defineProps({
   wordListId: { type: Number, required: true },
@@ -8,7 +7,6 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
   rotate: { type: Boolean, default: false },
   tagText: { type: String },
-  hint: { type: String, default: '' }, // the key that picks this pack
 });
 defineEmits(['select-list']);
 
@@ -42,7 +40,6 @@ const rotation = Math.floor(160 * Math.random()) / 100 - 0.8;
       </div>
     </template>
     <div v-else>{{ wordListId }}</div>
-    <KeyHint v-if="hint" :k="hint" class="wp-hint" />
     <div v-if="tagText !== undefined" class="wp-tag">{{ tagText }}</div>
     <div
       v-else-if="packs[wordListId] && packs[wordListId].sampleWords.length > 0"

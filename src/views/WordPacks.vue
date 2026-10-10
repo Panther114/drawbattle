@@ -7,7 +7,7 @@ import TopNav from '../components/TopNav.vue';
 
 <template>
   <div class="wpp-root">
-    <TopNav><router-link to="/" class="nav-home"><Icon name="home" />back to home<KeyHint k="h" /></router-link></TopNav>
+    <TopNav><router-link to="/" class="nav-home"><Icon name="home" />back to home<KeyHint k="esc" /></router-link></TopNav>
     <div class="wpp-title">word pack editor</div>
     <div class="wpp-sub">clone the official pack or start fresh, edit it your way, then pick it in any lobby</div>
     <div class="wpp-box"><WordPackEditor /></div>

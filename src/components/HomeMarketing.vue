@@ -66,35 +66,80 @@ onMounted(() => {
 
 <template>
   <div class="hm-marketing">
-    <div class="hm-container">
-      <svg width="346" height="318" viewBox="0 0 193 178" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path
-          v-for="(d, i) in STROKES"
-          :key="i"
-          :ref="(el) => (paths[i].value = el)"
-          :d="d"
-          stroke="currentColor"
-          stroke-width="3"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          pathLength="1"
-          stroke-dasharray="1"
-          stroke-dashoffset="1"
-        />
-      </svg>
-      <div class="hm-guess hm-guess1" :class="{ show: shown >= 0 }">
-        <div class="hm-guess-inner"><span class="hm-guess-icon" />ivan_qmap guessed <span class="hm-wrong">taiwan</span></div>
+    <div class="hm-duel" data-tilt>
+      <span class="hm-duel-tape" aria-hidden="true" />
+      <!-- a peek at a round in progress: the score, the word's blanks, the clock -->
+      <div class="hm-duel-bar" aria-hidden="true">
+        <span class="hm-duel-score">
+          <span class="hm-duel-team blue"><b :key="shown >= 3 ? 'won' : 'on'">{{ shown >= 3 ? 3 : 2 }}</b></span>
+          <span class="hm-duel-vs">vs</span>
+          <span class="hm-duel-team purple"><b>1</b></span>
+        </span>
+        <span class="hm-duel-word" :class="{ solved: shown >= 3 }">
+          <span v-for="(c, i) in 'canada'" :key="i" class="hm-duel-letter" :style="{ '--i': i }">{{ shown >= 3 ? c : '' }}</span>
+        </span>
+        <span class="hm-duel-timer">
+          <span class="hm-duel-watch">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5" /><path d="M10 3.5h4M12 3.5v2.5" /></svg>
+            <span class="hm-duel-hand" />
+          </span>
+          <!-- the clock ticks down like an odometer: two rolling strips of digits -->
+          <span class="hm-duel-time"
+            >0:<span class="hm-odo"><span class="hm-odo-strip tens"><i v-for="n in 6" :key="n">{{ 6 - n }}</i></span></span
+            ><span class="hm-odo"><span class="hm-odo-strip ones"><i v-for="n in 10" :key="n">{{ 10 - n }}</i></span></span></span
+          >
+        </span>
       </div>
-      <div class="hm-guess hm-guess2" :class="{ show: shown >= 1 }">
-        <div class="hm-guess-inner"><span class="hm-guess-icon" />aquavision guessed <span class="hm-wrong">ganada</span></div>
-      </div>
-      <div class="hm-guess hm-guess3" :class="{ show: shown >= 2 }">
-        <div class="hm-guess-inner"><span class="hm-guess-icon" />daniel guessed <span class="hm-wrong">51 st state</span></div>
-      </div>
-      <div class="hm-guess hm-guess4" :class="{ show: shown >= 3 }">
-        <div class="hm-guess-inner">
-          <span class="hm-guess-icon right" />gavania guessed <span class="hm-right">canada</span>
+      <div class="hm-container">
+        <svg width="346" height="318" viewBox="0 0 193 178" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path
+            v-for="(d, i) in STROKES"
+            :key="i"
+            :ref="(el) => (paths[i].value = el)"
+            :d="d"
+            stroke="currentColor"
+            stroke-width="3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            pathLength="1"
+            stroke-dasharray="1"
+            stroke-dashoffset="1"
+          />
+          <!-- the pencil rides along the mainland as it is drawn, then dashes over the islands and rests in the corner -->
+          <g class="hm-pencil" :style="{ offsetPath: `path('${STROKES[0]}')` }" aria-hidden="true">
+            <g class="hm-pencil-body" transform="rotate(-48)">
+              <path d="M0 0L7.5-3.3V3.3z" fill="#f6d7a6" stroke="#3a2a18" stroke-width="0.9" stroke-linejoin="round" />
+              <path d="M0 0L2.8-1.25V1.25z" fill="#2a2a2a" />
+              <rect x="7.5" y="-3.3" width="21" height="6.6" fill="#ffd426" stroke="#3a2a18" stroke-width="0.9" />
+              <path d="M7.5-1.1h21" stroke="#f0a800" stroke-width="1.1" />
+              <rect x="28.5" y="-3.5" width="3.6" height="7" fill="#c9ced9" stroke="#3a2a18" stroke-width="0.9" />
+              <rect x="32.1" y="-3.3" width="4.6" height="6.6" rx="1.8" fill="#ff8fb8" stroke="#3a2a18" stroke-width="0.9" />
+            </g>
+          </g>
+        </svg>
+        <div class="hm-guess hm-guess1" :class="{ show: shown >= 0 }">
+          <div class="hm-guess-inner"><span class="hm-guess-icon" />ivan_qmap guessed <span class="hm-wrong">taiwan</span></div>
         </div>
+        <div class="hm-guess hm-guess2" :class="{ show: shown >= 1 }">
+          <div class="hm-guess-inner"><span class="hm-guess-icon" />aquavision guessed <span class="hm-wrong">ganada</span></div>
+        </div>
+        <div class="hm-guess hm-guess3" :class="{ show: shown >= 2 }">
+          <div class="hm-guess-inner"><span class="hm-guess-icon" />daniel guessed <span class="hm-wrong">51 st state</span></div>
+        </div>
+        <div class="hm-guess hm-guess4" :class="{ show: shown >= 3 }">
+          <div class="hm-guess-inner">
+            <span class="hm-guess-icon right" />gavania guessed <span class="hm-right">canada</span>
+          </div>
+        </div>
+      </div>
+      <div class="hm-duel-foot" aria-hidden="true">
+        <span class="hm-duel-faces">
+          <span class="hm-duel-face f1">i</span><span class="hm-duel-face f2">a</span><span class="hm-duel-face f3">d</span><span class="hm-duel-face f4">g</span>
+        </span>
+        <Transition name="hm-swap" mode="out-in">
+          <span v-if="shown < 3" key="guessing" class="hm-duel-status">team blue is guessing<span class="hm-typing"><i /><i /><i /></span></span>
+          <span v-else key="scored" class="hm-duel-status scored">+1 point for team blue!</span>
+        </Transition>
       </div>
     </div>
   </div>

@@ -32,7 +32,7 @@ chill, chaos). All rules are stored in the game's settings, so they apply to eve
 | guessing | 2-4 words to choose from, letter hints every N seconds, forgive one typo, single-word answers only, longest word allowed |
 | players | max team size, allow spectators |
 
-The lobby settings next to it hold the round count, round length, *show word lengths*, *play the final drawdown* (turn it off and the game simply ends after the last round), *random teams*, *drawers always rotate*, *allow joining mid-game* and *late joiners pick their team*. **Streamer mode** (hides the game code) lives in the customize rules dialog. Every number rule (and the round count and round length) takes a typed whole number, clamped to a sane range
+The lobby settings next to it hold the round count, round length, *show word lengths*, *play the final drawdown* (turn it off and the game simply ends after the last round), *random teams*, *drawers always rotate* and *allow joining mid-game* (on by default; whoever joins a running game picks their team). **Streamer mode** (hides the game code) lives in the customize rules dialog. Every number rule (and the round count and round length) takes a typed whole number, clamped to a sane range
 (rounds 1-200, round length 5-600 s).
 
 ### in-game chat, vote kick and team switching
@@ -50,7 +50,9 @@ The lobby settings next to it hold the round count, round length, *show word len
 * **new round alert** – when a round starts while the game window is in the background, the browser tab title flashes
   until you come back.
 * **joining mid-game** – with *allow joining mid-game* on, someone opening the link of a running game can join as a new
-  player; with *late joiners pick their team* they choose the team, otherwise they go to the smaller one.
+  player and picks their team (a team that is full is greyed out).
+* **keyboard** – the common actions have a key, shown as a small keycap next to the button; press `?` for the list.
+  Enter jumps into the guess box, Esc closes things and goes back (leaving a game asks first).
 * **forced start** – when someone forces the next round, a planned drawer who never pressed *continue* is skipped in favour
   of the next active teammate.
 * **switch teams** – between rounds, a player on a team with **more than 2 active players** can ask to switch. It passes

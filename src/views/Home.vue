@@ -9,10 +9,13 @@ import { takeJoinError } from '../nav.js';
 import { safeStorage } from '../storage.js';
 import Btn from '../components/Btn.vue';
 import Icon from '../components/Icon.vue';
-import KeyHint from '../components/KeyHint.vue';
 import TopNav from '../components/TopNav.vue';
 import HomeMarketing from '../components/HomeMarketing.vue';
 import HomeWordPackUnit from '../components/HomeWordPackUnit.vue';
+import HomeBackdrop from '../components/home/HomeBackdrop.vue';
+import HomeMarquee from '../components/home/HomeMarquee.vue';
+import HomeHowTo from '../components/home/HomeHowTo.vue';
+import '../home.css';
 
 const props = defineProps({ wordListId: String });
 
@@ -56,10 +59,6 @@ const previewing = ref(false);
 useKeys([
   { key: 'n', run: togglePicker },
   { key: 'j', run: () => joinInput.value?.focus() },
-  { key: 'l', run: () => router.push('/lobbies') },
-  { key: 'w', run: () => router.push('/wordpacks') },
-  // the pack preview is the list on the right under the pack name
-  { key: 'p', when: () => list.value !== undefined && list.value.numWords > 0, run: () => (previewing.value = !previewing.value) },
   { key: 'esc', typing: true, prio: Prio.page, when: () => picking.value, run: togglePicker },
 ]);
 
@@ -139,84 +138,115 @@ async function joinGame() {
 </script>
 
 <template>
-  <div class="hm-root">
+  <div class="hm-root hm-home">
     <TopNav>
-      <router-link to="/lobbies" class="nav-lobbies"><Icon name="people" />lobbies<KeyHint k="l" /></router-link>
-      <router-link to="/wordpacks" class="nav-editor"><Icon name="pencil" />word pack editor<KeyHint k="w" /></router-link>
+      <router-link to="/lobbies" class="nav-lobbies"><Icon name="people" />lobbies</router-link>
+      <router-link to="/wordpacks" class="nav-editor"><Icon name="pencil" />word pack editor</router-link>
     </TopNav>
-    <div v-if="errorFromGame" class="hm-join-error-from-game">{{ errorText(errorFromGame.status, errorFromGame.gameId, errorFromGame.reason) }}</div>
-    <div class="hm-title">
-      <span class="hm-title-text" role="heading" aria-level="1" aria-label="draw battle! Gavania edition"
-        ><span v-for="(l, i) in TITLE" :key="i" class="hm-letter" aria-hidden="true" :style="{ '--i': i, '--r': l.tilt }">{{ l.ch }}</span
-        ><span class="hm-edition" aria-hidden="true">Gavania edition</span></span
-      >
-    </div>
-    <div class="hm-tagline">two teams of drawers face off with a frantic final round</div>
-    <HomeWordPackUnit v-if="listId !== undefined" v-model:open="previewing" :word-list="list" />
-    <HomeMarketing v-else class="hm-marketing-pos" />
-    <div class="hm-button-row">
-      <div class="hm-new-game-wrapper">
-        <Btn type="button" :force-rotation="-3" icon="sparkle" hint="n" @click="togglePicker">new game</Btn>
-        <Transition name="hm-pop">
-          <form v-if="picking" class="hm-picker" @submit.prevent="newGame">
-            <div class="hm-picker-label">pick a game code</div>
-            <div class="hm-picker-row">
+    <HomeBackdrop />
+    <section class="hm-hero hm-section">
+      <div v-if="errorFromGame" class="hm-join-error-from-game">{{ errorText(errorFromGame.status, errorFromGame.gameId, errorFromGame.reason) }}</div>
+      <div class="hm-hero-copy">
+        <div class="hm-lockup">
+          <div class="hm-logo" data-depth="-10" aria-hidden="true">
+            <img src="/logo.png" alt="" width="512" height="512" draggable="false" />
+            <span class="hm-logo-sheen" />
+          </div>
+          <div class="hm-title">
+            <span class="hm-title-text" role="heading" aria-level="1" aria-label="draw battle! Gavania edition"
+              ><span v-for="(l, i) in TITLE" :key="i" class="hm-letter" aria-hidden="true" :style="{ '--i': i, '--r': l.tilt }">{{ l.ch }}</span
+              ><span class="hm-edition" aria-hidden="true">Gavania edition</span></span
+            >
+            <svg class="hm-swoosh" viewBox="0 0 300 20" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="hm-rainbow" x1="0" x2="1" y1="0" y2="0">
+                  <stop offset="0" stop-color="#ffd426" />
+                  <stop offset="0.22" stop-color="#ff8a2a" />
+                  <stop offset="0.45" stop-color="#f440c1" />
+                  <stop offset="0.65" stop-color="#8f45ff" />
+                  <stop offset="0.83" stop-color="#3d63ff" />
+                  <stop offset="1" stop-color="#22d3ff" />
+                </linearGradient>
+              </defs>
+              <path d="M6 13C70 6 150 4 222 7c26 1 48 3 72 6" pathLength="1" />
+            </svg>
+          </div>
+        </div>
+        <div class="hm-tagline">two teams of drawers face off with a frantic final round</div>
+        <div class="hm-button-row">
+          <div class="hm-card hm-card-new">
+            <div class="hm-card-head">
+              <span class="hm-card-kicker"><Icon name="sparkle" />host</span>
+              <span class="hm-card-title">start a new game</span>
+              <span class="hm-card-sub">pick your own code or get a random one</span>
+            </div>
+            <div class="hm-card-tiles" aria-hidden="true"><span>?</span><span>?</span><span>?</span><span>?</span></div>
+            <div class="hm-new-game-wrapper">
+              <Btn type="button" :force-rotation="-3" icon="sparkle" hint="n" @click="togglePicker">new game</Btn>
+              <Transition name="hm-pop">
+                <form v-if="picking" class="hm-picker" @submit.prevent="newGame">
+                  <div class="hm-picker-label">pick a game code</div>
+                  <div class="hm-picker-row">
+                    <input
+                      ref="codeInput"
+                      v-model="newCode"
+                      type="text"
+                      class="hm-code-input"
+                      placeholder="abcd"
+                      maxlength="4"
+                      autocorrect="off"
+                      autocapitalize="off"
+                      spellcheck="false"
+                    />
+                    <button type="button" class="hm-dice" @click="randomCode">random</button>
+                  </div>
+                  <div class="hm-picker-hint">4 letters, or leave it empty for a surprise</div>
+                  <Btn type="submit" size="small" color="green" :force-rotation="2" icon="play" :disabled="busy">
+                    {{ newCode.length === 4 ? `create ${newCode.toUpperCase()}` : 'create game' }}
+                  </Btn>
+                </form>
+              </Transition>
+              <div v-if="list !== undefined && !picking" class="hm-word-list-edition">
+                <span class="hm-word-list-name">{{ list.name }}</span> word pack
+              </div>
+              <div v-if="createError !== undefined" class="hm-create-error">{{ createError }}</div>
+            </div>
+          </div>
+          <div class="hm-card hm-card-join">
+            <div class="hm-card-head">
+              <span class="hm-card-kicker"><Icon name="enter" />join</span>
+              <span class="hm-card-title">got a code?</span>
+            </div>
+            <form class="hm-join-game" @submit.prevent="joinGame">
               <input
-                ref="codeInput"
-                v-model="newCode"
+                ref="joinInput"
+                v-model="joinCode"
                 type="text"
-                class="hm-code-input"
-                placeholder="abcd"
-                maxlength="4"
+                class="hm-join-input"
+                placeholder="enter 4-letter code"
                 autocorrect="off"
                 autocapitalize="off"
                 spellcheck="false"
               />
-              <button type="button" class="hm-dice" @click="randomCode">random</button>
-            </div>
-            <div class="hm-picker-hint">4 letters, or leave it empty for a surprise</div>
-            <Btn type="submit" size="small" color="green" :force-rotation="2" icon="play" :disabled="busy">
-              {{ newCode.length === 4 ? `create ${newCode.toUpperCase()}` : 'create game' }}
-            </Btn>
-          </form>
-        </Transition>
-        <div v-if="list !== undefined && !picking" class="hm-word-list-edition">
-          <span class="hm-word-list-name">{{ list.name }}</span> word pack
+              <div class="hm-join-input-line" />
+              <div v-if="joinError" class="hm-inline-join-error">{{ errorText(joinError[0], joinError[1]) }}</div>
+              <Btn type="submit" :disabled="joinCode.length !== 4 || busy" :force-rotation="3" color="purple" icon="enter" class="hm-join-button" :hint="joinCode.length === 4 ? 'enter' : 'j'">
+                join game
+              </Btn>
+            </form>
+          </div>
         </div>
-        <div v-if="createError !== undefined" class="hm-create-error">{{ createError }}</div>
       </div>
-      <form class="hm-join-game" @submit.prevent="joinGame">
-        <input
-          ref="joinInput"
-          v-model="joinCode"
-          type="text"
-          class="hm-join-input"
-          placeholder="enter 4-letter code"
-          autocorrect="off"
-          autocapitalize="off"
-          spellcheck="false"
-        />
-        <div class="hm-join-input-line" />
-        <div v-if="joinError" class="hm-inline-join-error">{{ errorText(joinError[0], joinError[1]) }}</div>
-        <Btn type="submit" :disabled="joinCode.length !== 4 || busy" :force-rotation="3" color="purple" icon="enter" class="hm-join-button" :hint="joinCode.length === 4 ? 'enter' : 'j'">
-          join game
-        </Btn>
-      </form>
-    </div>
-    <div class="hm-how-header">how to play</div>
-    <div class="hm-how">
-      <div class="hm-how-row">
-        <div class="hm-how-icon team" />
-        <div class="hm-how-text">split up into two teams of 2 or <span class="hm-nobr">more players</span></div>
+      <div class="hm-hero-art">
+        <HomeWordPackUnit v-if="listId !== undefined" v-model:open="previewing" :word-list="list" />
+        <HomeMarketing v-else class="hm-marketing-pos" />
       </div>
-      <div class="hm-how-row">
-        <div class="hm-how-icon draw" />
-        <div class="hm-how-text">draw and guess each word before the <span class="hm-nobr">other team</span></div>
-      </div>
-      <div class="hm-how-row">
-        <div class="hm-how-icon replay" />
-        <div class="hm-how-text">replay the same words again in a frantic <span class="hm-nobr">final round</span></div>
-      </div>
+    </section>
+    <HomeMarquee />
+    <HomeHowTo class="hm-section" />
+    <div class="hm-signoff hm-section">
+      <img src="/logo.png" alt="" width="28" height="28" draggable="false" />
+      <span>draw battle! &middot; made for friends who can't draw</span>
     </div>
   </div>
 </template>

@@ -73,7 +73,6 @@ export const DEFAULT_RULES = {
   alwaysRotate: false,
   allowSpectators: true,
   allowLateJoin: true,
-  lateJoinPickTeam: false,
   singleWordsOnly: false,
   maxWordLength: 0,
   finalDrawdown: true,
@@ -478,11 +477,10 @@ export class Game {
     this.users[userId] = user;
     let ti = this.teams[0].userIds.length <= this.teams[1].userIds.length ? 0 : 1;
     if (this.teams[ti].userIds.length >= this.rule('maxTeamSize')) ti = 1 - ti;
-    // joining a game in progress: the player may pick the team when the lobby allows it
+    // joining a game in progress: the player picks the team (when it has room)
     const wanted = Number(team);
     if (
       this.started &&
-      this.rule('lateJoinPickTeam') &&
       Number.isInteger(wanted) &&
       wanted >= 0 &&
       wanted < this.teams.length &&

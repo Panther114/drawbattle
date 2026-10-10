@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { tileName } from '../keys.js';
 
 // A small keycap tile that names the key which does the same thing as the control beside it. Hidden on touch screens.
 const props = defineProps({ k: { type: String, required: true } });
@@ -10,5 +11,5 @@ const caps = computed(() => (props.k.length > 1 && props.k.includes('+') ? props
 </script>
 
 <template>
-  <span class="kh" aria-hidden="true"><kbd v-for="c in caps" :key="c" class="kh-cap" :class="{ wide: c.length > 1 }">{{ c }}</kbd></span>
+  <span class="kh" :data-k="tileName(k)" aria-hidden="true"><kbd v-for="c in caps" :key="c" class="kh-cap" :class="{ wide: c.length > 1 }">{{ c }}</kbd></span>
 </template>

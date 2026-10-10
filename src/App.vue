@@ -18,8 +18,7 @@ useKeys([
   { key: '?', run: toggleHelp },
   { key: 't', run: () => toggleTheme() },
   // the pages around the game lead back home (Esc comes last, so a field or a dialog gets it first)
-  { key: 'h', when: onSidePage, run: () => router.push('/') },
-  { key: 'esc', prio: Prio.fallback - 5, when: onSidePage, run: () => router.push('/') },
+  { key: 'esc', prio: Prio.fallback - 5, press: '.nav-home', when: onSidePage, run: () => router.push('/') },
 ]);
 </script>
 

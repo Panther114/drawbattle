@@ -360,7 +360,7 @@
   flex-direction: column;
   align-items: center;
   translate: calc(var(--fx-x) * 6px) 0;
-  animation: fx-float 2.8s var(--fx-out) forwards;
+  animation: fx-float 4.2s var(--fx-out) forwards;
 }
 .fx-reaction-face {
   width: 60px;
@@ -395,11 +395,11 @@
     transform: translateY(40px);
     opacity: 0;
   }
-  12% {
+  8% {
     transform: translateY(0);
     opacity: 1;
   }
-  80% {
+  85% {
     transform: translateY(-46px);
     opacity: 1;
   }
@@ -548,6 +548,20 @@
 .rw-item-face {
   width: 54px;
   height: 54px;
+}
+.rw-item-label {
+  position: absolute;
+  left: 50%;
+  top: calc(100% - 4px);
+  transform: translateX(-50%);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--gray);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.rw-item.active .rw-item-label {
+  color: var(--ink);
 }
 .rw-item-key {
   position: absolute;
@@ -1341,4 +1355,44 @@
   transform: translate(-2px, 2px) scale(0.96);
   box-shadow: -3px 3px var(--sh);
   transition-duration: 0.06s;
+}
+
+/* ---------- button press particles (src/fx/press.js) ---------- */
+.press-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9500;
+  overflow: hidden;
+}
+.press-bit,
+.press-ring {
+  position: absolute;
+  will-change: transform, opacity;
+}
+.press-bit.dot {
+  border-radius: 50%;
+}
+.press-bit.bar {
+  border-radius: 2px;
+}
+.press-ring {
+  width: 46px;
+  height: 46px;
+  border: 2px solid;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+/* a control pressed with its key looks pressed, just like a click */
+.kp {
+  transition-duration: 0.06s !important;
+}
+.btn.kp:not(:disabled) {
+  transform: translate(-2px, 2px) scale(0.96);
+  box-shadow: -3px 3px var(--sh);
+}
+.kp:not(.btn) {
+  transform: scale(0.92);
+  filter: brightness(0.94);
 }
