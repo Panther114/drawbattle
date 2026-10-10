@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref } from 'vue';
 import { addBind, cancelCapture, captureBind, chooseFile, clearFile, normalizeUrl, qs, removeBind, resetBinds, restoreDefaults, saveSettings, toggleQuick } from '../quickswitch.js';
 import Icon from '../components/Icon.vue';
+import KeyHint from '../components/KeyHint.vue';
 import TopNav from '../components/TopNav.vue';
 
 const urlText = ref(qs.url);
@@ -53,7 +54,7 @@ function test() {
 
 <template>
   <div class="stt-root qsw-root">
-    <TopNav><router-link to="/" class="nav-home"><Icon name="home" />back to home</router-link></TopNav>
+    <TopNav><router-link to="/" class="nav-home"><Icon name="home" />back to home<KeyHint k="h" /></router-link></TopNav>
     <div class="stt-title">quick switch</div>
     <div class="stt-sub">a hotkey that instantly covers the game with a page you pick. kept only in this browser</div>
 

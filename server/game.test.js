@@ -852,29 +852,57 @@ test('a custom pack can be shared with everyone, within tight limits', () => {
 });
 
 // ---- unready ----
-test('clicking ready again takes it back, at most once a second', () => {
+test('clicking ready again takes it back straight away', () => {
   const g = makeGame();
   const ws = lobby(g, 6);
   startGame(g, ws);
   toScoreScreen(g);
-  let t = Date.now();
-  g.now = () => t;
   send(g, ws.p1, C.ReadyUp, 0);
   assert.ok(g.ready.has('p1'));
-  t += 300;
-  send(g, ws.p1, C.ReadyUp, 0);
-  assert.ok(g.ready.has('p1'), 'a second click inside the cooldown is ignored');
-  t += 800;
   send(g, ws.p1, C.ReadyUp, 0);
   assert.ok(!g.ready.has('p1'), 'unreadied');
   assert.deepEqual(ws.p2.last(S.ReadyUp).slice(1), [0, []], 'everybody is told');
-  t += 1100;
   send(g, ws.p1, C.ReadyUp, 0);
   assert.ok(g.ready.has('p1'), 'ready again');
+});
+
+test('ready is ignored until the round is over', () => {
+  const g = makeGame();
+  const ws = lobby(g, 6);
+  startGame(g, ws);
+  // the round is still being drawn: nobody can ready up, not even everybody at once
+  g.currentRound.word = g.currentRound.wordChoices[0];
+  g.currentRound.wordChosenTime = g.now();
+  for (const id of Object.keys(ws)) send(g, ws[id], C.ReadyUp, 0);
+  assert.equal(g.ready.size, 0);
+  assert.equal(g.previousRounds.length, 0, 'the round was not skipped');
+  toScoreScreen(g);
+  send(g, ws.p1, C.ReadyUp, 0);
+  assert.ok(g.ready.has('p1'), 'allowed once the results show');
 });
 
 test('a new game allows joining mid-game by default', () => {
   const g = new Game('dflt', {});
   assert.equal(g.settings.allowLateJoin, true);
   g.destroy();
+});
+
+test('quick reactions are relayed to everyone, validated and rate limited, never stored', () => {
+  const g = makeGame();
+  const ws = lobby(g, 3);
+  send(g, ws.p1, C.Reaction, 3);
+  const m = ws.p2.last(S.Reaction)[1];
+  assert.deepEqual(m, { r: 3, userId: 'p1', name: 'p1', team: g.teamIndexOf('p1') });
+  assert.ok(ws.p1.last(S.Reaction), 'the sender sees their own reaction too');
+  for (const bad of [-1, 8, 1.5, '2', null]) send(g, ws.p2, C.Reaction, bad);
+  assert.equal(ws.p3.got(S.Reaction).length, 1, 'bad reaction ids are ignored');
+  for (let i = 0; i < 6; i++) send(g, ws.p2, C.Reaction, 0);
+  assert.equal(ws.p3.got(S.Reaction).length, 1 + 4, 'a burst is capped');
+  assert.equal(g.chat.length, 0, 'reactions are not chat history');
+  const spec = new MockWs(g);
+  g.connect(spec, { userId: 's', spectate: true });
+  send(g, spec, C.Reaction, 1);
+  const sm = ws.p1.last(S.Reaction)[1];
+  assert.equal(sm.userId, undefined, 'a spectator reaction never carries a user id');
+  assert.equal(sm.team, -1);
 });

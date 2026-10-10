@@ -2,12 +2,14 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { JoinStatus } from '../shared.js';
+import { Prio, useKeys } from '../keys.js';
 import { API, loadPack, packs } from '../wordpacks.js';
 import { track } from '../analytics.js';
 import { takeJoinError } from '../nav.js';
 import { safeStorage } from '../storage.js';
 import Btn from '../components/Btn.vue';
 import Icon from '../components/Icon.vue';
+import KeyHint from '../components/KeyHint.vue';
 import TopNav from '../components/TopNav.vue';
 import HomeMarketing from '../components/HomeMarketing.vue';
 import HomeWordPackUnit from '../components/HomeWordPackUnit.vue';
@@ -23,6 +25,7 @@ const busy = ref(false);
 const picking = ref(false); // the "choose a game code" panel under the new game button
 const newCode = ref('');
 const codeInput = ref();
+const joinInput = ref();
 const errorFromGame = takeJoinError();
 // the title drops in letter by letter, each from its own little tilt
 const TITLE = [...'draw battle!'].map((ch, i) => ({ ch, tilt: `${((i * 7) % 5) * 6 - 12}deg` }));
@@ -48,6 +51,17 @@ function togglePicker() {
   createError.value = undefined;
   if (picking.value) nextTick(() => codeInput.value?.focus());
 }
+
+const previewing = ref(false);
+useKeys([
+  { key: 'n', run: togglePicker },
+  { key: 'j', run: () => joinInput.value?.focus() },
+  { key: 'l', run: () => router.push('/lobbies') },
+  { key: 'w', run: () => router.push('/wordpacks') },
+  // the pack preview is the list on the right under the pack name
+  { key: 'p', when: () => list.value !== undefined && list.value.numWords > 0, run: () => (previewing.value = !previewing.value) },
+  { key: 'esc', typing: true, prio: Prio.page, when: () => picking.value, run: togglePicker },
+]);
 
 const listId = computed(() => (props.wordListId !== undefined ? parseInt(props.wordListId) : undefined));
 const list = computed(() => (listId.value !== undefined ? packs[listId.value] : undefined));
@@ -127,8 +141,8 @@ async function joinGame() {
 <template>
   <div class="hm-root">
     <TopNav>
-      <router-link to="/lobbies" class="nav-lobbies"><Icon name="people" />lobbies</router-link>
-      <router-link to="/wordpacks" class="nav-editor"><Icon name="pencil" />word pack editor</router-link>
+      <router-link to="/lobbies" class="nav-lobbies"><Icon name="people" />lobbies<KeyHint k="l" /></router-link>
+      <router-link to="/wordpacks" class="nav-editor"><Icon name="pencil" />word pack editor<KeyHint k="w" /></router-link>
     </TopNav>
     <div v-if="errorFromGame" class="hm-join-error-from-game">{{ errorText(errorFromGame.status, errorFromGame.gameId, errorFromGame.reason) }}</div>
     <div class="hm-title">
@@ -138,11 +152,11 @@ async function joinGame() {
       >
     </div>
     <div class="hm-tagline">two teams of drawers face off with a frantic final round</div>
-    <HomeWordPackUnit v-if="listId !== undefined" :word-list="list" />
+    <HomeWordPackUnit v-if="listId !== undefined" v-model:open="previewing" :word-list="list" />
     <HomeMarketing v-else class="hm-marketing-pos" />
     <div class="hm-button-row">
       <div class="hm-new-game-wrapper">
-        <Btn type="button" :force-rotation="-3" icon="sparkle" @click="togglePicker">new game</Btn>
+        <Btn type="button" :force-rotation="-3" icon="sparkle" hint="n" @click="togglePicker">new game</Btn>
         <Transition name="hm-pop">
           <form v-if="picking" class="hm-picker" @submit.prevent="newGame">
             <div class="hm-picker-label">pick a game code</div>
@@ -173,6 +187,7 @@ async function joinGame() {
       </div>
       <form class="hm-join-game" @submit.prevent="joinGame">
         <input
+          ref="joinInput"
           v-model="joinCode"
           type="text"
           class="hm-join-input"
@@ -183,7 +198,7 @@ async function joinGame() {
         />
         <div class="hm-join-input-line" />
         <div v-if="joinError" class="hm-inline-join-error">{{ errorText(joinError[0], joinError[1]) }}</div>
-        <Btn type="submit" :disabled="joinCode.length !== 4 || busy" :force-rotation="3" color="purple" icon="enter" class="hm-join-button">
+        <Btn type="submit" :disabled="joinCode.length !== 4 || busy" :force-rotation="3" color="purple" icon="enter" class="hm-join-button" :hint="joinCode.length === 4 ? 'enter' : 'j'">
           join game
         </Btn>
       </form>

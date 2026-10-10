@@ -8,7 +8,8 @@ const KEY = 'drawbattle.stats.v1';
 const MAX_GAMES = 300;
 const storage = safeStorage('local');
 
-// games: [{ k: game key, t: first seen (ms), r: [[roundIndex, 'd' | 'g', won 0/1, points gained - points lost]], done, result: 'win' | 'loss' | 'draw', mine, theirs, mark, players: [[name, 0 my team | 1 other team]] (players only for games saved since they were added) }]
+// games: [{ k: game key, t: first seen (ms), r: [[roundIndex, 'd' | 'g', won 0/1, points gained - points lost]], done, result: 'win' | 'loss' | 'draw', mine, theirs (the final scores of my team and the other), mark, players: [[name, 0 my team | 1 other team]], me: my place in players }]
+// (players only for games saved since they were added, me only since after that)
 function load() {
   try {
     const parsed = JSON.parse(storage?.getItem(KEY) ?? 'null');
@@ -50,7 +51,7 @@ export function recordRound(key, roundIndex, role, won, net = 0) {
 }
 
 // a finished game: result is 'win' | 'loss' | 'draw'
-export function recordGame(key, result, mine, theirs, mark = undefined, players = undefined) {
+export function recordGame(key, result, mine, theirs, mark = undefined, players = undefined, me = undefined) {
   const g = entry(key);
   if (g.done) return false;
   g.done = true;
@@ -59,6 +60,7 @@ export function recordGame(key, result, mine, theirs, mark = undefined, players 
   g.theirs = theirs;
   g.mark = mark;
   if (players) g.players = players;
+  if (Number.isInteger(me)) g.me = me;
   g.t = Date.now();
   save();
   return true;
@@ -96,6 +98,25 @@ export function resetStats() {
   save();
 }
 
+// The two teams of a finished game for one line: the winners first, then the losers (a draw keeps my team first).
+// side: { tone: 'win' | 'lose' | 'tie', players: [{ name, me }] }. Undefined when the players were not kept.
+// Games saved before I was marked: I am the one on my team who goes by the name saved on this device, if that is unambiguous.
+export function matchup(g, savedName = '') {
+  if (!Array.isArray(g.players) || g.players.length === 0) return undefined;
+  const all = g.players.map(([name, side], i) => ({ name, side, i }));
+  let me = Number.isInteger(g.me) ? g.me : -1;
+  if (me < 0 && savedName) {
+    const same = all.filter((p) => p.side === 0 && p.name.trim().toLowerCase() === savedName.trim().toLowerCase());
+    if (same.length === 1) me = same[0].i;
+  }
+  const team = (side) => all.filter((p) => p.side === side).map((p) => ({ name: p.name, me: p.i === me }));
+  const mine = team(0);
+  const theirs = team(1);
+  if (g.result === 'win') return [{ tone: 'win', players: mine }, { tone: 'lose', players: theirs }];
+  if (g.result === 'loss') return [{ tone: 'win', players: theirs }, { tone: 'lose', players: mine }];
+  return [{ tone: 'tie', players: mine }, { tone: 'tie', players: theirs }];
+}
+
 const rate = (won, total) => (total > 0 ? Math.round((won / total) * 100) : undefined);
 
 export function summarize(games = stats.games) {
@@ -108,8 +129,15 @@ export function summarize(games = stats.games) {
     const w = rs.filter((r) => r[2] === 1).length;
     return { total: rs.length, won: w, rate: rate(w, rs.length) };
   };
+  // the average score is what my team ended its games with (`mine`, stored since the very first version);
+  // a record without a usable number is left out of it, and the card says how many games it is based on
+  const points = (v) => (v === undefined || v === null || v === '' || !Number.isFinite(Number(v)) ? undefined : Number(v));
+  const scores = played.map((g) => [points(g.mine), points(g.theirs)]).filter(([m]) => m !== undefined);
+  const mean = (xs) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : undefined);
+  const against = scores.map(([, t]) => t).filter((t) => t !== undefined);
   return {
     played: played.length,
+    average: { games: scores.length, mine: mean(scores.map(([m]) => m)), theirs: mean(against) },
     won,
     lost: played.length - won - draws,
     draws,

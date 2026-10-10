@@ -1,0 +1,1344 @@
+/* ===== celebration effects, intro / outro cinematics, quick reactions =====
+   Only transform / opacity / clip-path / stroke-dashoffset are animated, so everything stays on the compositor. */
+:root {
+  --fx-ink: #33261a;
+  --fx-paper: #fffad4;
+  --fx-paper-line: #87e0ff55;
+  --fx-paper-margin: #ef5c3c55;
+  --fx-card: #ffffff;
+  --fx-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --fx-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+:root[data-theme='dark'] {
+  --fx-ink: #eceef6;
+  --fx-paper: #191c28;
+  --fx-paper-line: #7fd2f022;
+  --fx-paper-margin: #ef5c3c44;
+  --fx-card: #232737;
+}
+
+/* a key tile used inside the effects (matches the game's key hints) */
+.fx-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5em;
+  height: 1.5em;
+  padding: 0 0.35em;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--gray);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+}
+@media (pointer: coarse) {
+  .fx-key {
+    display: none;
+  }
+}
+
+/* ---------- the layer ---------- */
+.fx-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 800;
+  overflow: hidden;
+}
+.fx-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* the clock is running out: a soft warm vignette that breathes at the edges */
+.fx-urgent {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 62%, #ef5c3c38 100%);
+  animation: fx-breathe 1s ease-in-out infinite;
+}
+@keyframes fx-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.fx-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--fx-c) 40%, transparent), transparent 70%);
+  animation: fx-flash 0.9s var(--fx-out) forwards;
+}
+@keyframes fx-flash {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---------- banners ---------- */
+/* banners live low in the middle of the screen: below the canvas, clear of the drawing tools and the word */
+.fx-banners {
+  position: absolute;
+  bottom: 112px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 10px;
+}
+.fx-banner {
+  --b0: #ffe006;
+  --b1: #c98a00;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 22px 10px 14px;
+  background: var(--fx-card);
+  color: var(--ink);
+  border: 2.5px solid var(--fx-ink);
+  border-radius: 18px 14px 20px 12px;
+  box-shadow: -5px 5px 0 var(--b1);
+  white-space: nowrap;
+  rotate: -2deg;
+}
+.fx-banner.tone-fast {
+  --b0: #ffe006;
+  --b1: #e0a800;
+}
+.fx-banner.tone-fire {
+  --b0: #ff9b52;
+  --b1: #ef5c3c;
+  rotate: 2deg;
+}
+.fx-banner.tone-tie {
+  --b0: #d0d0d0;
+  --b1: #808080;
+}
+.fx-banner.tone-team0 {
+  --b0: #87e0ff;
+  --b1: #2689ac;
+}
+.fx-banner.tone-team1 {
+  --b0: #fac7ff;
+  --b1: #b45cc0;
+  rotate: 2deg;
+}
+.fx-banner-icon {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  fill: var(--b0);
+  stroke: var(--fx-ink);
+  stroke-width: 2.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  animation: fx-icon-wiggle 0.6s ease-in-out 0.3s 2;
+}
+.tone-fire .fx-banner-icon {
+  animation: fx-flicker 0.32s ease-in-out infinite alternate;
+  transform-origin: 50% 90%;
+}
+.tone-tie .fx-banner-icon {
+  animation: fx-teeter 0.9s ease-in-out infinite;
+}
+.fx-banner-text {
+  font-size: 28px;
+  line-height: 1.05;
+}
+.fx-banner-sub {
+  font-size: 15px;
+  color: var(--gray);
+}
+.fx-spark {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--b0);
+  border: 2px solid var(--fx-ink);
+  animation: fx-spark 0.9s var(--fx-out) 0.15s both;
+}
+.fx-spark.s1 {
+  top: -8px;
+  left: 18%;
+  --dx: -14px;
+  --dy: -16px;
+}
+.fx-spark.s2 {
+  top: -10px;
+  right: 12%;
+  --dx: 16px;
+  --dy: -14px;
+  width: 7px;
+  height: 7px;
+}
+.fx-spark.s3 {
+  bottom: -9px;
+  right: 30%;
+  --dx: 10px;
+  --dy: 16px;
+  width: 8px;
+  height: 8px;
+}
+@keyframes fx-spark {
+  0% {
+    transform: translate(0, 0) scale(0);
+  }
+  60% {
+    transform: translate(var(--dx), var(--dy)) scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(var(--dx) * 1.4), calc(var(--dy) * 1.4)) scale(0.6);
+    opacity: 0;
+  }
+}
+@keyframes fx-icon-wiggle {
+  0%,
+  100% {
+    rotate: 0deg;
+  }
+  25% {
+    rotate: -14deg;
+  }
+  75% {
+    rotate: 12deg;
+  }
+}
+@keyframes fx-flicker {
+  from {
+    transform: scale(1, 1) rotate(-3deg);
+  }
+  to {
+    transform: scale(0.94, 1.08) rotate(3deg);
+  }
+}
+@keyframes fx-teeter {
+  0%,
+  100% {
+    rotate: -8deg;
+  }
+  50% {
+    rotate: 8deg;
+  }
+}
+.fxb-enter-active {
+  animation: fx-banner-in 0.55s var(--fx-pop);
+}
+.fxb-leave-active {
+  animation: fx-banner-out 0.4s ease-in forwards;
+  position: absolute;
+}
+.fxb-move {
+  transition: transform 0.3s var(--fx-out);
+}
+@keyframes fx-banner-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-24px) scale(0.3) rotate(-10deg);
+  }
+  45% {
+    opacity: 1;
+    transform: translateY(4px) scale(1.12, 0.9) rotate(3deg);
+  }
+  70% {
+    transform: translateY(-2px) scale(0.96, 1.05) rotate(-1deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes fx-banner-out {
+  to {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.85);
+  }
+}
+
+/* ---------- round wipe: a crayon stroke sweeps across with the result ---------- */
+.fx-wipe {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fx-wipe-stroke {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 100%;
+  height: 30vh;
+  transform: translateY(-50%);
+  overflow: visible;
+}
+.fx-wipe-stroke path {
+  fill: none;
+  stroke: var(--fx-c);
+  stroke-width: 74;
+  stroke-linecap: round;
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+  opacity: 0.9;
+  animation: fx-wipe-stroke 1.2s var(--fx-out) forwards;
+}
+@keyframes fx-wipe-stroke {
+  0% {
+    stroke-dashoffset: 1;
+  }
+  38% {
+    stroke-dashoffset: 0;
+    opacity: 0.9;
+  }
+  70% {
+    stroke-dashoffset: 0;
+    opacity: 0.9;
+  }
+  100% {
+    stroke-dashoffset: -1;
+    opacity: 0.5;
+  }
+}
+.fx-wipe-text {
+  position: relative;
+  font-size: clamp(20px, 2.6vw, 32px);
+  color: #101010;
+  padding: 0 24px;
+  text-align: center;
+  animation: fx-wipe-text 1.2s var(--fx-out) forwards;
+}
+@keyframes fx-wipe-text {
+  0% {
+    opacity: 0;
+    transform: translateX(-60px) rotate(-3deg);
+  }
+  30% {
+    opacity: 1;
+    transform: translateX(0) rotate(-2deg);
+  }
+  72% {
+    opacity: 1;
+    transform: translateX(10px) rotate(-2deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(80px) rotate(-1deg);
+  }
+}
+
+/* ---------- reactions that float up from the bottom of the screen ---------- */
+/* reactions rise beside the reaction button (bottom right), away from the banners and the canvas */
+.fx-reactions {
+  position: absolute;
+  right: 86px;
+  bottom: 18px;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-end;
+  gap: 10px;
+}
+.fx-reaction {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  translate: calc(var(--fx-x) * 6px) 0;
+  animation: fx-float 2.8s var(--fx-out) forwards;
+}
+.fx-reaction-face {
+  width: 60px;
+  height: 60px;
+  filter: drop-shadow(-3px 3px 0 #00000026);
+  animation: fx-react-pop 0.6s var(--fx-pop);
+}
+.fx-reaction-bubble {
+  margin-top: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--fx-card);
+  border: 1.5px solid var(--rule);
+  border-radius: 10px;
+  padding: 1px 10px 2px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.fx-reaction.mine .fx-reaction-bubble {
+  border-color: var(--fx-ink);
+}
+.fx-reaction-label {
+  font-size: 17px;
+  color: var(--ink);
+}
+.fx-reaction-name {
+  font-size: 12px;
+}
+@keyframes fx-float {
+  0% {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+  12% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  80% {
+    transform: translateY(-46px);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-70px);
+    opacity: 0;
+  }
+}
+@keyframes fx-react-pop {
+  0% {
+    transform: scale(0.2) rotate(-25deg);
+  }
+  55% {
+    transform: scale(1.25) rotate(8deg);
+  }
+  80% {
+    transform: scale(0.94) rotate(-3deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+.fxr-move {
+  transition: transform 0.3s var(--fx-out);
+}
+.fxr-leave-active {
+  display: none;
+}
+
+/* ---------- quick reaction wheel ---------- */
+.rw-trigger {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 41;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--rule);
+  background: var(--raised);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: -3px 3px 0 var(--rule-soft);
+  transition:
+    transform 0.2s var(--fx-pop),
+    border-color 0.2s ease;
+}
+.rw-trigger:hover,
+.rw-trigger.open {
+  transform: rotate(-10deg) scale(1.08);
+  border-color: var(--darkblue);
+}
+.rw-trigger.cooling .rw-trigger-face {
+  opacity: 0.45;
+  transform: scale(0.85);
+}
+.rw-trigger-face {
+  width: 36px;
+  height: 36px;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s var(--fx-pop);
+}
+.rw-trigger-key {
+  position: absolute;
+  left: -6px;
+  top: -6px;
+}
+.rw-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 8500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, color-mix(in srgb, var(--page) 70%, transparent) 0, transparent 60%);
+}
+.rw-wheel {
+  position: relative;
+  filter: drop-shadow(-5px 6px 0 var(--rule-soft));
+  width: 300px;
+  height: 300px;
+}
+.rw-ring {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.rw-ring path {
+  fill: var(--raised);
+  stroke: var(--fx-ink);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 1 1;
+  animation: fx-draw 0.45s var(--fx-out) both;
+}
+.rw-hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 120px;
+  text-align: center;
+  pointer-events: none;
+}
+.rw-hub-label {
+  font-size: 22px;
+  color: var(--ink);
+}
+.rw-hub-hint {
+  font-size: 12px;
+  color: var(--gray);
+}
+.rw-item {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 66px;
+  height: 66px;
+  margin: -33px 0 0 -33px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transform: translate(var(--x), var(--y));
+  animation: rw-item-in 0.42s var(--fx-pop) both;
+  animation-delay: calc(var(--i) * 22ms);
+  transition:
+    transform 0.18s var(--fx-pop),
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+.rw-item.active {
+  transform: translate(var(--x), var(--y)) scale(1.18) rotate(-6deg);
+  background: var(--hover-tint);
+  border-color: var(--darkblue);
+}
+.rw-item-face {
+  width: 54px;
+  height: 54px;
+}
+.rw-item-key {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+}
+@keyframes rw-item-in {
+  from {
+    transform: translate(0, 0) scale(0.2);
+    opacity: 0;
+  }
+}
+.rw-enter-active {
+  animation: rw-in 0.3s var(--fx-pop);
+}
+.rw-leave-active {
+  animation: rw-in 0.18s ease-in reverse;
+}
+@keyframes rw-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85) rotate(-6deg);
+  }
+}
+
+@keyframes fx-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ---------- game start cinematic ---------- */
+.fxi {
+  position: fixed;
+  inset: 0;
+  z-index: 8000;
+  cursor: pointer;
+  overflow: hidden;
+}
+.fxi-paper {
+  position: absolute;
+  inset: 0;
+  background: var(--fx-paper);
+  clip-path: circle(0% at 50% 50%);
+  animation: fxi-iris 0.55s var(--fx-out) forwards;
+}
+.fxi-lines {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent 0 calc(8% - 1px), var(--fx-paper-margin) calc(8% - 1px) 8%, transparent 8%),
+    repeating-linear-gradient(180deg, transparent 0 33px, var(--fx-paper-line) 33px 34px);
+  animation: fx-fade 0.6s ease 0.15s both;
+}
+@keyframes fxi-iris {
+  to {
+    clip-path: circle(75% at 50% 50%);
+  }
+}
+@keyframes fx-fade {
+  from {
+    opacity: 0;
+  }
+}
+.fxi-doodle {
+  position: absolute;
+  overflow: visible;
+  translate: -50% -50%;
+  rotate: var(--r);
+  fill: none;
+  stroke: var(--fx-ink);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.5;
+  animation: fxi-doodle-pop 0.5s var(--fx-pop) var(--d) both;
+}
+.fxi-doodle path {
+  stroke-dasharray: 1 1;
+  animation: fx-draw 0.6s var(--fx-out) var(--d) both;
+}
+.fxi-doodle.k-star path {
+  fill: #ffe00666;
+}
+.fxi-doodle.k-heart path {
+  fill: #ff9aa866;
+}
+@keyframes fxi-doodle-pop {
+  from {
+    scale: 0;
+  }
+}
+
+.fxi-title {
+  position: absolute;
+  left: 50%;
+  top: 9%;
+  width: min(560px, 86vw);
+  transform: translateX(-50%);
+}
+.fxi-title-svg {
+  width: 100%;
+  overflow: visible;
+}
+.fxi-title-svg text {
+  font-family: Schoolbell, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 84px;
+  fill: var(--fx-ink);
+  fill-opacity: 0;
+  stroke: var(--fx-ink);
+  stroke-width: 1.4;
+  stroke-dasharray: 700;
+  stroke-dashoffset: 700;
+  animation:
+    fxi-write 0.9s ease-in-out 1.05s forwards,
+    fxi-ink 0.35s ease 1.75s forwards;
+}
+.fxi-underline {
+  fill: none;
+  stroke: #ef5c3c;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+  animation: fx-draw 0.4s var(--fx-out) 1.85s forwards;
+}
+@keyframes fxi-write {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes fxi-ink {
+  to {
+    fill-opacity: 1;
+  }
+}
+.fxi-pencil {
+  position: absolute;
+  top: 30%;
+  left: 8%;
+  width: 46px;
+  fill: #ffd23f;
+  stroke: var(--fx-ink);
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0;
+  animation: fxi-pencil 1s ease-in-out 1s forwards;
+}
+@keyframes fxi-pencil {
+  0% {
+    opacity: 0;
+    transform: translate(0, 10px) rotate(0);
+  }
+  10% {
+    opacity: 1;
+  }
+  25% {
+    transform: translate(20%, -6px) rotate(-8deg);
+  }
+  50% {
+    transform: translate(400%, 8px) rotate(6deg);
+  }
+  75% {
+    transform: translate(800%, -6px) rotate(-6deg);
+  }
+  92% {
+    opacity: 1;
+    transform: translate(1050%, 4px) rotate(4deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(1100%, -30px) rotate(30deg);
+  }
+}
+
+.fxi-stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(920px, 94vw);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 18px;
+}
+.fxi-team {
+  grid-row: 1;
+  background: var(--fx-card);
+  border: 2.5px solid var(--fx-ink);
+  border-radius: 22px 16px 24px 14px;
+  box-shadow: -7px 7px 0 var(--c1);
+  padding: 16px 20px 20px;
+  animation: fxi-team-l 0.7s var(--fx-pop) 0.18s both;
+}
+.fxi-team.left {
+  grid-column: 1;
+  rotate: -3deg;
+}
+.fxi-team.right {
+  grid-column: 3;
+  rotate: 3deg;
+  animation-name: fxi-team-r;
+  border-radius: 16px 22px 14px 24px;
+}
+@keyframes fxi-team-l {
+  0% {
+    opacity: 0;
+    transform: translateX(-70vw) rotate(-20deg);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(14px) rotate(3deg) scale(1.04, 0.96);
+  }
+  80% {
+    transform: translateX(-4px) rotate(-1deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes fxi-team-r {
+  0% {
+    opacity: 0;
+    transform: translateX(70vw) rotate(20deg);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(-14px) rotate(-3deg) scale(1.04, 0.96);
+  }
+  80% {
+    transform: translateX(4px) rotate(1deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+.fxi-team-name {
+  font-size: 40px;
+  line-height: 1.1;
+  text-align: center;
+  margin-bottom: 14px;
+  text-decoration: underline wavy var(--c1);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 7px;
+}
+.fxi-players {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 10px;
+}
+.fxi-player {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 22px;
+  padding: 3px 12px 3px 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c0) 35%, transparent);
+  animation: fx-pop-in 0.45s var(--fx-pop) var(--d) both;
+}
+.fxi-player.me {
+  font-weight: 700;
+  outline: 2px solid var(--c1);
+}
+.fxi-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--c0);
+  border: 1.5px solid var(--fx-ink);
+  font-size: 15px;
+  color: #101010;
+  text-transform: uppercase;
+}
+@keyframes fx-pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.2) translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fxi-vs {
+  grid-column: 2;
+  grid-row: 1;
+  position: relative;
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fxi-stamp 0.5s cubic-bezier(0.5, 0, 0.75, 0) 0.55s both;
+}
+.fxi-splat {
+  position: absolute;
+  inset: 0;
+  fill: #ffe006;
+  stroke: var(--fx-ink);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  animation: fxi-splat 0.5s var(--fx-pop) 0.95s both;
+}
+.fxi-vs-text {
+  position: relative;
+  font-size: 58px;
+  line-height: 1;
+  color: #101010;
+  rotate: -8deg;
+  text-shadow: -3px 3px 0 #ef5c3c;
+}
+@keyframes fxi-stamp {
+  0% {
+    opacity: 0;
+    transform: scale(4) rotate(25deg);
+  }
+  80% {
+    opacity: 1;
+    transform: scale(0.9) rotate(-4deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes fxi-splat {
+  0% {
+    transform: scale(0.3) rotate(-30deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+/* everything gives a little jolt as the stamp lands */
+.fxi-stage {
+  animation: fxi-bump 0.3s ease-out 1.05s;
+}
+@keyframes fxi-bump {
+  30% {
+    translate: 3px 4px;
+  }
+  60% {
+    translate: -2px -2px;
+  }
+}
+
+.fxi-count-wrap {
+  position: absolute;
+  left: 50%;
+  bottom: 9%;
+  transform: translateX(-50%);
+  height: 110px;
+  width: 200px;
+  display: flex;
+  justify-content: center;
+  animation: fx-fade 0.3s ease 1.6s both;
+}
+.fxi-count {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 58px;
+  animation: fxi-count 0.5s var(--fx-pop);
+}
+.fxi-count.go {
+  width: 200px;
+  color: var(--text-green);
+}
+.fxi-count-ring {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  fill: none;
+  stroke: var(--fx-ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 1 1;
+  animation: fx-draw 0.5s var(--fx-out) both;
+}
+.fxi-count.go .fxi-count-ring {
+  display: none;
+}
+@keyframes fxi-count {
+  0% {
+    transform: scale(0.3) rotate(-20deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15) rotate(4deg);
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+  }
+}
+.fxi-skip,
+.fxo-skip {
+  position: absolute;
+  right: 20px;
+  bottom: 16px;
+  font-size: 14px;
+  color: var(--gray);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  animation: fx-fade 0.4s ease 1s both;
+}
+@media (pointer: coarse) {
+  .fxi-skip,
+  .fxo-skip {
+    display: none;
+  }
+}
+
+/* leaving: three crayon strokes sweep over, then the paper peels away */
+.fxi-wipe {
+  position: absolute;
+  inset: -10%;
+  width: 120%;
+  height: 120%;
+  overflow: visible;
+  pointer-events: none;
+}
+.fxi-wipe path {
+  fill: none;
+  stroke-width: 240;
+  stroke-linecap: round;
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+}
+.fxi-wipe .w1 {
+  stroke: #87e0ff;
+}
+.fxi-wipe .w2 {
+  stroke: #ffe006;
+}
+.fxi-wipe .w3 {
+  stroke: #fac7ff;
+}
+.fxi.leaving .fxi-wipe path {
+  animation: fxi-sweep 0.75s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+.fxi.leaving .fxi-wipe .w2 {
+  animation-delay: 0.07s;
+}
+.fxi.leaving .fxi-wipe .w3 {
+  animation-delay: 0.14s;
+}
+@keyframes fxi-sweep {
+  0% {
+    stroke-dashoffset: 1;
+  }
+  55% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -1;
+  }
+}
+.fxi.leaving .fxi-paper {
+  animation:
+    fxi-iris 0.55s var(--fx-out) forwards,
+    fxi-peel 0.5s cubic-bezier(0.55, 0, 1, 0.45) 0.45s forwards;
+}
+@keyframes fxi-peel {
+  to {
+    opacity: 0;
+    transform: scale(1.06) rotate(1.5deg);
+  }
+}
+.fxi.leaving.fast {
+  animation: fx-out 0.3s ease forwards;
+}
+.fxi.leaving.fast .fxi-wipe {
+  display: none;
+}
+@keyframes fx-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* ---------- game over cinematic ---------- */
+.fxo {
+  position: fixed;
+  inset: 0;
+  z-index: 8000;
+  cursor: pointer;
+  overflow: hidden;
+}
+.fxo-half {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50.5%;
+  background:
+    repeating-linear-gradient(180deg, transparent 0 33px, var(--fx-paper-line) 33px 34px),
+    var(--fx-paper);
+}
+.fxo-half.top {
+  top: 0;
+  animation: fxo-slam-top 0.42s cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+.fxo-half.bottom {
+  bottom: 0;
+  animation: fxo-slam-bottom 0.42s cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+.fxo-tear {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 22px;
+  fill: var(--fx-paper);
+}
+.fxo-half.top .fxo-tear {
+  top: 100%;
+  margin-top: -1px;
+}
+.fxo-half.bottom .fxo-tear {
+  bottom: 100%;
+  margin-bottom: -1px;
+}
+@keyframes fxo-slam-top {
+  from {
+    transform: translateY(-105%);
+  }
+}
+@keyframes fxo-slam-bottom {
+  from {
+    transform: translateY(105%);
+  }
+}
+.fxo.opening .fxo-half.top {
+  animation: fxo-open-top 0.6s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+.fxo.opening .fxo-half.bottom {
+  animation: fxo-open-bottom 0.6s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+@keyframes fxo-open-top {
+  to {
+    transform: translateY(-110%) rotate(-2deg);
+  }
+}
+@keyframes fxo-open-bottom {
+  to {
+    transform: translateY(110%) rotate(2deg);
+  }
+}
+.fxo.opening .fxo-content {
+  animation: fxo-content-out 0.35s ease-in forwards;
+}
+@keyframes fxo-content-out {
+  to {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+.fxo-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  animation: fxo-thud 0.3s ease-out 0.42s;
+}
+@keyframes fxo-thud {
+  30% {
+    transform: translateY(6px);
+  }
+  65% {
+    transform: translateY(-2px);
+  }
+}
+.fxo-rays {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 150vmax;
+  height: 150vmax;
+  margin: -75vmax 0 0 -75vmax;
+  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--c0) 30%, transparent) 0 10deg, transparent 10deg 20deg);
+  mask-image: radial-gradient(circle, #000 0, transparent 45%);
+  -webkit-mask-image: radial-gradient(circle, #000 0, transparent 45%);
+  animation:
+    fx-fade 0.6s ease 0.9s both,
+    fxo-spin 24s linear infinite;
+}
+@keyframes fxo-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+.fxo-title {
+  position: relative;
+  width: min(440px, 80vw);
+  overflow: visible;
+}
+.fxo-title text {
+  font-family: Schoolbell, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 76px;
+  fill: var(--fx-ink);
+  fill-opacity: 0;
+  stroke: var(--fx-ink);
+  stroke-width: 1.4;
+  stroke-dasharray: 700;
+  stroke-dashoffset: 700;
+  animation:
+    fxi-write 0.65s ease-in-out 0.45s forwards,
+    fxi-ink 0.3s ease 0.95s forwards;
+}
+.fxo-trophy {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  filter: drop-shadow(-4px 4px 0 #00000022);
+  animation: fxo-trophy 0.9s var(--fx-pop) 0.95s both;
+}
+@keyframes fxo-trophy {
+  0% {
+    opacity: 0;
+    transform: translateY(-60vh) rotate(-30deg);
+  }
+  45% {
+    opacity: 1;
+    transform: translateY(0) rotate(8deg) scale(1.15, 0.85);
+  }
+  65% {
+    transform: translateY(-18px) rotate(-4deg) scale(0.95, 1.06);
+  }
+  82% {
+    transform: translateY(0) rotate(2deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+.fxo-headline {
+  position: relative;
+  font-size: clamp(34px, 5vw, 56px);
+  line-height: 1.1;
+  text-align: center;
+  padding: 0 16px;
+  animation: fx-pop-in 0.5s var(--fx-pop) 1.15s both;
+}
+.fxo-score {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: 18px;
+  animation: fx-pop-in 0.45s var(--fx-pop) 1.3s both;
+}
+.fxo-team {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 110px;
+}
+.fxo-team-name {
+  color: var(--gray);
+}
+.fxo-points {
+  font-size: 44px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.fxo-team.t0 .fxo-points {
+  color: var(--text-blue);
+}
+.fxo-team.t1 .fxo-points {
+  color: #b45cc0;
+}
+:root[data-theme='dark'] .fxo-team.t1 .fxo-points {
+  color: #e7a3ee;
+}
+.fxo-dash {
+  font-size: 36px;
+  color: var(--gray);
+}
+.fxo-sub {
+  position: relative;
+  font-size: 20px;
+  color: var(--gray);
+  animation: fx-pop-in 0.45s var(--fx-pop) 1.6s both;
+}
+
+/* phones: the two teams stack above and below the stamp */
+@media (max-width: 640px) {
+  .fxi-title {
+    top: 6%;
+  }
+  .fxi-stage {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    width: min(360px, 88vw);
+  }
+  .fxi-team.left {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .fxi-vs {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: center;
+    width: 84px;
+    height: 84px;
+  }
+  .fxi-vs-text {
+    font-size: 42px;
+  }
+  .fxi-team.right {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  .fxi-team-name {
+    font-size: 30px;
+    margin-bottom: 8px;
+  }
+  .fxi-player {
+    font-size: 18px;
+  }
+  .fxi-count-wrap {
+    bottom: 4%;
+    transform: translateX(-50%) scale(0.8);
+  }
+  .fx-banner-text {
+    font-size: 22px;
+  }
+  .fx-banners {
+    bottom: 64px;
+    width: max-content;
+    max-width: calc(100vw - 24px);
+  }
+  .fx-banner {
+    white-space: normal;
+  }
+  .fx-reactions {
+    right: 10px;
+    bottom: 150px;
+    flex-direction: column-reverse;
+    align-items: flex-end;
+    gap: 4px;
+  }
+  .fx-reaction {
+    flex-direction: row;
+    gap: 4px;
+  }
+  .fx-reaction-face {
+    width: 40px;
+    height: 40px;
+  }
+  .rw-wheel {
+    transform: scale(0.9);
+  }
+}
+
+/* the effects are cosmetic: honour reduced motion by turning the moving parts off */
+@media (prefers-reduced-motion: reduce) {
+  .fx-urgent,
+  .fx-wipe,
+  .fxo-rays {
+    display: none;
+  }
+  .fxi *,
+  .fxo *,
+  .rw-item,
+  .fx-reaction {
+    animation-duration: 0.01s !important;
+    animation-delay: 0s !important;
+  }
+}
+
+/* ---------- small everyday touches ---------- */
+/* buttons squish a little when pressed */
+.btn:active:not(:disabled) {
+  transform: translate(-2px, 2px) scale(0.96);
+  box-shadow: -3px 3px var(--sh);
+  transition-duration: 0.06s;
+}

@@ -13,6 +13,7 @@ import { initTheme } from './theme.js';
 import { tooltip } from './tooltip.js';
 import { loadOfficialPacks } from './wordpacks.js';
 import './style.css';
+import './fx.css';
 
 const routes = [
   {

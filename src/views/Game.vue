@@ -22,6 +22,7 @@ import {
   applyRules,
   rules,
   findCorrectGuess,
+  totalScores,
   voteThreshold,
 } from '../shared.js';
 import { API } from '../wordpacks.js';
@@ -35,7 +36,10 @@ import { creditFor, score } from '../rating.js';
 import { presence, trackPresence } from '../presence.js';
 import { flashTab, stopFlash } from '../attention.js';
 import { qs, toggleQuick } from '../quickswitch.js';
+import { Prio, focusGuess, toggleHelp, useKeys } from '../keys.js';
+import ConfirmModal from '../components/ConfirmModal.vue';
 import Icon from '../components/Icon.vue';
+import KeyHint from '../components/KeyHint.vue';
 import AudioPreloader from '../components/AudioPreloader.vue';
 import GameFinalRound from '../components/GameFinalRound.vue';
 import GameChat from '../components/GameChat.vue';
@@ -49,6 +53,12 @@ import SoundToggle from '../components/SoundToggle.vue';
 import SpectatorGameFinalRound from '../components/SpectatorGameFinalRound.vue';
 import SpectatorGameRound from '../components/SpectatorGameRound.vue';
 import ThemeToggle from '../components/ThemeToggle.vue';
+import FxLayer from '../components/FxLayer.vue';
+import FxGameIntro from '../components/FxGameIntro.vue';
+import FxGameOutro from '../components/FxGameOutro.vue';
+import ReactionWheel from '../components/ReactionWheel.vue';
+import { fx, fxOn } from '../fx/fx.js';
+import { useGameFx } from '../fx/useGameFx.js';
 
 const props = defineProps({
   gameId: { type: String, required: true },
@@ -177,6 +187,18 @@ function sameFinalStage(a, b) {
   return true;
 }
 
+// the stage of the round in play, for the server's clock
+function refreshRoundStage() {
+  const round = currentRound.value;
+  if (round === undefined || game.value === undefined) return;
+  const [stage, secs] = computeRoundStage(round, Date.now() - clockOffset.value, game.value.settings);
+  roundStage.value = stage;
+  roundSecondsRemaining.value = secs;
+}
+// a new round starts in the stage it is really in, not in the previous round's (its score screen, with the ready button)
+// until the next tick
+watch(currentRound, refreshRoundStage, { flush: 'sync' });
+
 watch(tick, (nowLocal) => {
   const now = nowLocal - clockOffset.value;
   const round = currentRound.value;
@@ -206,11 +228,7 @@ watch(tick, (nowLocal) => {
     }
     startCountdown.value = undefined;
   }
-  if (round !== undefined) {
-    const [stage, secs] = computeRoundStage(round, now, game.value.settings);
-    roundStage.value = stage;
-    roundSecondsRemaining.value = secs;
-  }
+  refreshRoundStage();
   if (finalRound.value !== undefined) {
     const next = computeFinalStage(finalRound.value, now);
     if (finalStage.value === undefined || !sameFinalStage(finalStage.value, next)) finalStage.value = next;
@@ -257,10 +275,10 @@ function onMessage(e) {
   switch (m[0]) {
     case S.SessionStart: {
       const [, snapshot, serverNow] = m;
+      clockOffset.value = Date.now() - serverNow;
       game.value = snapshot;
       connStatus.value = Conn.Connected;
       wasLive.value = true;
-      clockOffset.value = Date.now() - serverNow;
       lastAwardKey = award.value?.key; // a reconnect must not pay out a guess again
       if (presence.value !== UserPresence.Active && !isSpectator.value) socket?.send(JSON.stringify([C.Presence, presence.value]));
       break;
@@ -334,6 +352,7 @@ function onMessage(e) {
           if (g.previousRounds.length !== index - 1) throw new Error('bad StartRound index');
           g.previousRounds[index - 1] = g.currentRound;
         } else if (index !== 0) throw new Error('bad StartRound index');
+        clockOffset.value = Date.now() - serverNow; // (before the round is set: the stage is worked out from it right away)
         g.currentRound = round;
       }
       clockOffset.value = Date.now() - serverNow;
@@ -467,6 +486,9 @@ function onMessage(e) {
           }
         }, 1500);
       }
+      break;
+    case S.Reaction:
+      fx('reaction', { ...m[1], mine: m[1].userId !== undefined && m[1].userId === userId.value });
       break;
     case S.EndVotes:
       if (g !== undefined) g.endVotes = m[1];
@@ -687,7 +709,12 @@ watch(finalStage, (s) => {
   }
 });
 
+// a hidden tab's timers crawl: catch the clocks up the moment the player looks again (the results may be waiting)
+const catchUp = () => {
+  if (!document.hidden) tick.value = Date.now();
+};
 onMounted(async () => {
+  document.addEventListener('visibilitychange', catchUp);
   trackPresence();
   if (props.summaryUrl !== undefined) {
     const res = await fetch(props.summaryUrl);
@@ -710,6 +737,7 @@ onMounted(async () => {
   }, 100);
 });
 onUnmounted(() => {
+  document.removeEventListener('visibilitychange', catchUp);
   unmounted = true;
   stopFlash();
   teardown();
@@ -738,6 +766,20 @@ const canEndVote = computed(
     ['round', 'score', 'final'].includes(view.value),
 );
 
+// ---- keyboard ----
+const confirmLeave = ref(false);
+function leaveGame() {
+  confirmLeave.value = false;
+  router.push('/');
+}
+useKeys([
+  { key: 'm', when: () => !isIOS(), run: () => (soundsEnabled.value = !soundsEnabled.value) },
+  { key: 'q', run: () => (confirmLeave.value = true) },
+  { key: 'v', when: () => canEndVote.value, run: () => send([C.VoteEnd]) },
+  // Enter jumps to the guess box when the screen has one (the chat takes it otherwise)
+  { key: 'enter', prio: Prio.fallback + 5, run: focusGuess },
+]);
+
 const view = computed(() => {
   const g = game.value;
   if (g === undefined || (joinStatus.value !== undefined && !isUnavailableJoinStatus(joinStatus.value)) || isAutoConnecting.value) {
@@ -760,6 +802,28 @@ const view = computed(() => {
 watch(view, (v) => {
   if (v === 'summary') recordFinish();
 });
+
+// ---- celebration effects and the start / game over cinematics (purely cosmetic, client only) ----
+const isLive = computed(() => isConnected.value && wasLive.value);
+const gameFx = useGameFx({ game, userId, teamIndex, roundStage, roundSecondsRemaining, view, live: isLive });
+onUnmounted(gameFx.dispose);
+const showIntro = ref(false);
+watch(startCountdown, (s, prev) => {
+  // the lobby countdown just began: play the intro over it (a reload in the last second is not worth it)
+  if (s !== undefined && prev === undefined && s >= 2 && isLive.value && fxOn() && game.value?.previousRounds.length === 0) showIntro.value = true;
+});
+const introStarted = computed(() => startCountdown.value === undefined && currentRound.value !== undefined);
+const showOutro = ref(false);
+const summaryReady = ref(true); // the summary waits until the game over cinematic opens up
+const LIVE_VIEWS = ['round', 'score', 'final', 'roundSpectator', 'finalSpectator'];
+watch(view, (v, prev) => {
+  if (v === 'summary' && LIVE_VIEWS.includes(prev) && fxOn()) {
+    showOutro.value = true;
+    summaryReady.value = false;
+  }
+});
+const finalTotals = computed(() => (game.value ? totalScores(game.value.previousRounds, game.value.finalRound) : [0, 0]));
+const react = (i) => send([C.Reaction, i]);
 </script>
 
 <template>
@@ -769,6 +833,7 @@ watch(view, (v) => {
       <div v-if="game && game.connectedAppInfo === undefined" class="game-info-row">
         <span>game {{ game.settings.streamerMode ? '****' : gameId.toUpperCase() }}</span>
         <router-link v-tooltip="'leave game'" to="/" class="leave-link" aria-label="leave game" />
+        <KeyHint k="q" />
       </div>
       <div v-if="canEndVote" class="game-info-row">
         <button
@@ -778,15 +843,18 @@ watch(view, (v) => {
           :class="{ mine: endMine, hot: endYes > 0 }"
           @click="send([C.VoteEnd])"
         >
-          {{ endMine ? `ending: ${endYes}/${endNeeded}` : endYes > 0 ? `end game ${endYes}/${endNeeded}` : 'end game' }}
+          {{ endMine ? `ending: ${endYes}/${endNeeded}` : endYes > 0 ? `end game ${endYes}/${endNeeded}` : 'end game' }}<KeyHint k="v" />
         </button>
       </div>
       <div class="game-info-row">
         <template v-if="!isIOS()">
           <span>sounds</span>
           <SoundToggle class="sound-toggle-pos" :enabled="soundsEnabled" @toggle="soundsEnabled = !soundsEnabled" />
+          <KeyHint k="m" />
         </template>
         <ThemeToggle class="sound-toggle-pos" />
+        <KeyHint k="t" />
+        <button v-tooltip="'keyboard shortcuts'" type="button" class="gi-keys" aria-label="keyboard shortcuts" @click="toggleHelp"><KeyHint k="?" /></button>
         <button v-if="qs.enabled" v-tooltip="'quick switch'" type="button" class="qs-trigger" aria-label="quick switch" @click="toggleQuick"><Icon name="bolt" /></button>
       </div>
     </div>
@@ -794,7 +862,7 @@ watch(view, (v) => {
     <Transition name="view" mode="out-in">
     <div v-if="view === 'empty'" />
     <GameSummary
-      v-else-if="view === 'summary'"
+      v-else-if="view === 'summary' && summaryReady"
       :game="game"
       :show-back-to-lobby="showBackToLobby"
       :user-id="userId"
@@ -855,6 +923,7 @@ watch(view, (v) => {
     />
     <GameScore
       v-else-if="view === 'score'"
+      :key="game.previousRounds.length"
       :game-id="gameId"
       :round-index="game.previousRounds.length"
       :round="currentRound"
@@ -865,6 +934,7 @@ watch(view, (v) => {
       :current-user-id="userId"
       :is-spectator="isSpectator"
       :game-settings="game.settings"
+      :can-ready="roundStage === RoundStage.ScoreScreen"
       @client-message="send"
       @audio-cue="audioCue"
     />
@@ -906,6 +976,35 @@ watch(view, (v) => {
       :is-spectator="isSpectator"
       :between-rounds="view === 'score'"
       @client-message="send"
+    />
+    <ConfirmModal
+      v-if="confirmLeave"
+      title="leave this game?"
+      :text="view === 'summary' ? '' : 'you can come back with the same code while it lasts'"
+      ok-label="leave"
+      cancel-label="stay"
+      @confirm="leaveGame"
+      @close-modal="confirmLeave = false"
+    />
+    <ReactionWheel v-if="game && isConnected && view !== 'empty' && view !== 'summary'" @react="react" />
+    <FxLayer :urgent="gameFx.urgent.value" />
+    <FxGameIntro
+      v-if="showIntro && game"
+      :teams="game.teams"
+      :users="game.users"
+      :user-id="userId"
+      :seconds-left="startCountdown"
+      :started="introStarted"
+      @done="showIntro = false"
+    />
+    <FxGameOutro
+      v-if="showOutro && game"
+      :teams="game.teams"
+      :totals="finalTotals"
+      :team-index="isSpectator ? -1 : teamIndex"
+      :ended-early="Boolean(game.endedEarly)"
+      @reveal="summaryReady = true"
+      @done="showOutro = false"
     />
     <GameToasts :items="toasts" />
     <AudioPreloader v-if="!isIOS()" />

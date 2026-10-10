@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import { C, RoundStage, displayName, roundWinner, winStreak } from '../shared.js';
+import { Prio, useKeys } from '../keys.js';
 import Btn from './Btn.vue';
 import CanvasOverlay from './CanvasOverlay.vue';
 import IconWithText from './IconWithText.vue';
@@ -33,6 +34,17 @@ function chooseWord(i) {
   }, 2000);
 }
 
+// 1-4 pick the word on the matching button
+const canChoose = () => props.round.chooserId === props.userId && props.round.teamStates.some((ts) => ts.drawerId === props.userId);
+useKeys(
+  [0, 1, 2, 3].map((i) => ({
+    key: String(i + 1),
+    when: () => canChoose() && i < props.round.wordChoices.length,
+    run: () => chooseWord(i),
+  })),
+  { prio: Prio.overlay },
+);
+
 function streakInfo() {
   const drawers = props.round.teamStates.map((t) => t.drawerId);
   const prev = props.previousRounds;
@@ -62,6 +74,7 @@ function streakInfo() {
                 :force-rotation="ROTATIONS[i]"
                 :disabled="isNotChosen(i)"
                 :word-choice-button="true"
+                :hint="String(i + 1)"
                 :class="{ 'rs-choice-disabled': isNotChosen(i) }"
                 @click="chooseWord(i)"
               >

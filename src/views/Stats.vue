@@ -1,8 +1,10 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { resetStats, stats, summarize } from '../stats.js';
+import { matchup, resetStats, stats, summarize } from '../stats.js';
+import { safeStorage } from '../storage.js';
 import { formatDelta, resetScore, score } from '../rating.js';
 import Icon from '../components/Icon.vue';
+import KeyHint from '../components/KeyHint.vue';
 import TopNav from '../components/TopNav.vue';
 
 const s = computed(() => summarize(stats.games));
@@ -16,6 +18,9 @@ const spark = computed(() => {
   const span = Math.max(1, hi - lo);
   return pts.map((v, i) => `${((i / (pts.length - 1)) * 100).toFixed(1)},${(36 - ((v - lo) / span) * 32).toFixed(1)}`).join(' ');
 });
+// (the name saved on this device tells which player I am in games saved before that was recorded)
+const savedName = safeStorage('local')?.getItem('userName') ?? '';
+const lineups = computed(() => new Map(s.value.recent.map((g) => [g.k, matchup(g, savedName)])));
 const confirming = ref(false);
 const pct = (v) => (v === undefined ? '–' : `${v}%`);
 const when = (t) => new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
@@ -38,7 +43,7 @@ function reset() {
 
 <template>
   <div class="stt-root">
-    <TopNav><router-link to="/" class="nav-home"><Icon name="home" />back to home</router-link></TopNav>
+    <TopNav><router-link to="/" class="nav-home"><Icon name="home" />back to home<KeyHint k="h" /></router-link></TopNav>
     <div class="stt-title">my stats</div>
     <div class="stt-sub">kept only in this browser. nothing is sent to the server</div>
 
@@ -64,6 +69,19 @@ function reset() {
         <div class="stt-bar"><div class="stt-bar-fill" :style="{ width: (s.winRate ?? 0) + '%' }" /></div>
       </div>
       <div class="stt-card">
+        <div class="stt-label"><Icon name="chart" class="stt-ic c-blue" />average score</div>
+        <div class="stt-big">{{ s.average.mine ?? '–' }}</div>
+        <div class="stt-note">
+          <template v-if="s.average.mine !== undefined">
+            points per game for your team<template v-if="s.average.theirs !== undefined"> · {{ s.average.theirs }} for the other</template>
+          </template>
+          <template v-else>no finished games yet</template>
+        </div>
+        <div v-if="s.average.mine !== undefined && s.average.theirs !== undefined" class="stt-bar" :title="`across ${s.average.games} game${s.average.games === 1 ? '' : 's'}`">
+          <div class="stt-bar-fill" :style="{ width: Math.round((s.average.mine / Math.max(1, s.average.mine + s.average.theirs)) * 100) + '%' }" />
+        </div>
+      </div>
+      <div class="stt-card">
         <div class="stt-label"><Icon name="pencil" class="stt-ic c-orange" />win rate as drawer</div>
         <div class="stt-big">{{ pct(s.drawer.rate) }}</div>
         <div class="stt-note">{{ s.drawer.won }} of {{ s.drawer.total }} rounds won</div>
@@ -86,16 +104,22 @@ function reset() {
         <span v-if="deltaOf(g) !== undefined" class="stt-delta" :class="signClass(deltaOf(g))" title="player score change">{{ formatDelta(deltaOf(g)) }}</span>
         <span v-if="g.mark" class="pf-mark" :class="'pf-' + g.mark" title="team performance">{{ g.mark }}</span>
         <span class="stt-date">{{ when(g.t) }}</span>
-        <div v-if="g.players?.length" class="stt-players">
-          <span v-for="side in [0, 1]" :key="side" class="stt-side" :class="'s' + side">
-            <b>{{ side === 0 ? 'your team' : 'other team' }}:</b> {{ g.players.filter((p) => p[1] === side).map((p) => p[0]).join(', ') }}
-          </span>
+        <div v-if="lineups.get(g.k)" class="stt-teams" :title="lineups.get(g.k)[0].tone === 'tie' ? 'a draw' : 'winners on the left'">
+          <template v-for="(side, si) in lineups.get(g.k)" :key="si">
+            <span v-if="si === 1" class="stt-vs">vs</span>
+            <span class="stt-team" :class="side.tone"
+              ><template v-for="(p, pi) in side.players" :key="pi"><template v-if="pi > 0">, </template><b v-if="p.me" class="stt-me">{{ p.name }}</b
+                ><template v-else>{{ p.name }}</template></template
+              ></span
+            >
+          </template>
         </div>
       </div>
     </div>
 
     <div class="stt-foot">
       <p>a round counts as a win when your team guessed the word first. each game shows the exact time it finished and, for games played since players were tracked, who was on each team. the final drawdown is not counted in the drawer / guesser rates.</p>
+      <p>average score: the final score your team finished each game with, averaged over every finished game kept here, the older ones too. the bar shows your share of the points.</p>
       <p>team performance mark, S to F: one per game. it grades how fast and how often your team got the words, whether or not it won. older games are worked out from the data stored here, so they are estimates.</p>
       <p>player score: every match shares out +100 points. you earn points for fast first guesses and quick drawings, plus a bonus for winning, and you give up the average of the lobby.</p>
       <button v-if="stats.games.length || score.history.length" class="stt-reset" @click="reset"><Icon name="trash" />{{ confirming ? 'click again to erase' : 'reset my stats' }}</button>

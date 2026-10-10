@@ -4,8 +4,10 @@ import { C, MAX_NAME_LENGTH, cleanNameInput, containsYouTag, rules, sanitizeName
 import { packs } from '../wordpacks.js';
 import { track } from '../analytics.js';
 import { safeStorage } from '../storage.js';
+import { useKeys } from '../keys.js';
 import Btn from './Btn.vue';
 import Icon from './Icon.vue';
+import KeyHint from './KeyHint.vue';
 import FishbowlPopulation from './FishbowlPopulation.vue';
 import Footer from './Footer.vue';
 import Settings from './Settings.vue';
@@ -38,6 +40,11 @@ const nameInput = ref();
 const startCooldown = ref(false);
 
 onMounted(() => nameInput.value?.focus());
+// joined: let go of the name box so the keys work again
+watch(
+  () => props.isConnected,
+  (c) => c && nameInput.value?.blur(),
+);
 
 watch(
   () => props.startGameSecondsRemaining,
@@ -95,6 +102,13 @@ const needsPlayers = computed(() =>
   randomTeams.value ? everyone.value.length < 4 : props.teams.some((t) => t.userIds.length < 2),
 );
 const starting = computed(() => props.startGameSecondsRemaining !== undefined);
+const canJoinTeam = (ti) => {
+  const team = props.teams[ti];
+  return (
+    props.isConnected && !props.isSpectator && props.fishbowlWords === undefined && !randomTeams.value && !starting.value &&
+    team !== undefined && !team.userIds.includes(props.userId) && !isFull(team)
+  );
+};
 const startDisabled = computed(
   () =>
     props.isSpectator ||
@@ -103,6 +117,25 @@ const startDisabled = computed(
     startCooldown.value ||
     (pack.value !== undefined && pack.value.numWords < 2 * props.gameSettings.numRounds),
 );
+
+// ---- keyboard: Enter joins, then starts the game; 1 / 2 pick a team ----
+function onEnter() {
+  if (props.isSpectator) return false;
+  if (!props.isConnected) {
+    if (!cleanName.value) return false;
+    emit('join-game', cleanName.value);
+    return;
+  }
+  if (props.fishbowlWords !== undefined || startDisabled.value) return false;
+  startGame();
+}
+useKeys([
+  { key: 'enter', run: onEnter },
+  { key: 'esc', when: () => starting.value && !props.isSpectator, run: cancelStart },
+  { key: 'n', when: () => nameInput.value !== undefined && !nameInput.value.disabled, run: () => nameInput.value.focus() },
+  { key: 's', when: () => !props.isConnected && !props.isSpectator, run: () => emit('spectate-game') },
+  ...[0, 1, 2, 3].map((ti) => ({ key: String(ti + 1), when: () => canJoinTeam(ti), run: () => joinTeam(ti) })),
+]);
 </script>
 
 <template>
@@ -114,6 +147,7 @@ const startDisabled = computed(
 
     <form v-if="!isSpectator" class="lobby-name-form" @submit.prevent="cleanName && emit('join-game', cleanName)">
       <label class="lobby-name-label" for="nameInput">my name is</label>
+      <KeyHint v-if="isConnected" k="n" />
       <input
         id="nameInput"
         ref="nameInput"
@@ -128,10 +162,11 @@ const startDisabled = computed(
       />
       <template v-if="!isConnected">
         <div>
-          <Btn :force-rotation="-2" icon="enter" class="lobby-join-button" :disabled="cleanName.length === 0">join game</Btn>
+          <Btn :force-rotation="-2" icon="enter" class="lobby-join-button" :disabled="cleanName.length === 0" hint="enter">join game</Btn>
         </div>
         <div class="lobby-spectate-row">
           <a href="#" class="spectate-link" @click.prevent="emit('spectate-game')">join as spectator</a>
+          <KeyHint k="s" />
         </div>
       </template>
     </form>
@@ -171,6 +206,7 @@ const startDisabled = computed(
             class="lobby-join-team"
             color="purple"
             :disabled="starting || team.userIds.includes(userId) || isFull(team)"
+            :hint="canJoinTeam(ti) ? String(ti + 1) : ''"
             :force-rotation="ti % 2 === 0 ? -2.5 : 3"
             @click="joinTeam(ti)"
           >
@@ -191,12 +227,12 @@ const startDisabled = computed(
       />
       <template v-else>
         <div class="lobby-start-container">
-          <Btn :force-rotation="0" icon="play" :disabled="startDisabled" @click="startGame">
+          <Btn :force-rotation="0" icon="play" :disabled="startDisabled" :hint="startDisabled ? '' : 'enter'" @click="startGame">
             {{ starting ? `starting in ${startGameSecondsRemaining}...` : 'start game!' }}
           </Btn>
           <div class="lobby-start-subtext">
             <template v-if="needsPlayers">{{ randomTeams ? 'random teams need at least 4 players' : 'each team needs at least 2 players' }}</template>
-            <button v-if="!isSpectator && starting" type="button" class="lobby-cancel" @click="cancelStart">cancel</button>
+            <button v-if="!isSpectator && starting" type="button" class="lobby-cancel" @click="cancelStart">cancel<KeyHint k="esc" /></button>
           </div>
         </div>
         <Settings

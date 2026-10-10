@@ -28,6 +28,7 @@ export const S = {
   Presence: 26,
   GameEnded: 27,
   EndVotes: 28,
+  Reaction: 29,
   ServerError: 300,
   ForceRefresh: 301,
 };
@@ -51,6 +52,7 @@ export const C = {
   SwitchVote: 115,
   Presence: 116,
   VoteEnd: 117,
+  Reaction: 118,
 };
 
 export const Status = { Connected: 1, Disconnected: 2, Kicked: 3 };
@@ -106,9 +108,12 @@ export const MAX_CHAT_LENGTH = 140;
 const CHAT_HISTORY = 80;
 const CHAT_BURST = 5; // messages allowed per CHAT_WINDOW_MS per player
 const CHAT_WINDOW_MS = 8000;
+export const REACTION_COUNT = 8; // quick reactions on the client's reaction wheel
+const REACTION_BURST = 4; // reactions allowed per REACTION_WINDOW_MS per sender
+const REACTION_WINDOW_MS = 4000;
 const MIN_VOTE_PLAYERS = 3; // a vote kick needs at least this many active players
 const MIN_RANDOM_PLAYERS = 4; // random teams need 2 + 2
-const READY_COOLDOWN_MS = 1000;
+const SCORE_SCREEN_SLACK_MS = 1500; // clients may reach the score screen a moment before the server's clock does
 const PRESENCE_BURST = 8; // presence changes allowed per PRESENCE_WINDOW_MS per player
 const PRESENCE_WINDOW_MS = 10000;
 const MAX_RATING = 99999;
@@ -253,7 +258,6 @@ export class Game {
     this.sockets = new Map(); // userId -> Set<ws>
     this.spectators = new Set();
     this.ready = new Set();
-    this.readyToggledAt = new Map(); // userId -> time of the last ready / unready click
     this.timers = new Set();
     this.lobbyTimers = new Map();
     this.createdAt = Date.now();
@@ -266,6 +270,7 @@ export class Game {
     this.chatSeq = 0;
     this.chatLog = new Map(); // userId -> recent send times (rate limit)
     this.presenceLog = new Map(); // userId -> recent presence change times (rate limit)
+    this.reactionLog = new Map(); // userId -> recent reaction times (rate limit)
     this.preShuffleTeams = undefined; // manual teams saved while a random-teams countdown runs
     this.banned = new Set(); // vote-kicked user ids
     this.kickVotes = new Map(); // targetId -> Set<voterId>
@@ -568,6 +573,7 @@ export class Game {
     if (ctx.spectate) {
       // spectators may only talk
       if (msg[0] === C.Chat) this.onChat(ws, undefined, msg[1]);
+      else if (msg[0] === C.Reaction) this.onReaction(ws, undefined, msg[1]);
       return;
     }
     const userId = ctx.userId;
@@ -605,6 +611,8 @@ export class Game {
         return this.onPresence(userId, msg[1]);
       case C.VoteEnd:
         return this.onVoteEnd(userId);
+      case C.Reaction:
+        return this.onReaction(ws, userId, msg[1]);
       default:
         return;
     }
@@ -695,6 +703,22 @@ export class Game {
     if (spectator) return this.addChat({ spec: true, name: (ws.gameCtx && ws.gameCtx.name) || '', text: body });
     const user = this.users[userId];
     this.addChat({ userId, name: user.name, team: this.teamIndexOf(userId), text: body });
+  }
+
+  // quick reactions are relayed as they are: they are not part of the chat history
+  onReaction(ws, userId, index) {
+    if (!Number.isInteger(index) || index < 0 || index >= REACTION_COUNT) return;
+    const now = Date.now();
+    const spectator = userId === undefined;
+    const recent = ((spectator ? ws.reactionTimes : this.reactionLog.get(userId)) || []).filter((t) => now - t < REACTION_WINDOW_MS);
+    if (recent.length >= REACTION_BURST) return;
+    recent.push(now);
+    if (spectator) ws.reactionTimes = recent;
+    else this.reactionLog.set(userId, recent);
+    this.touch();
+    if (spectator) return this.broadcast([S.Reaction, { r: index, name: (ws.gameCtx && ws.gameCtx.name) || 'spectator', team: -1 }]);
+    const user = this.users[userId];
+    this.broadcast([S.Reaction, { r: index, userId, name: user.name || 'anonymous', team: this.teamIndexOf(userId) }]);
   }
 
   // ---------- voting (vote kick, team switch appeals) ----------
@@ -1175,12 +1199,16 @@ export class Game {
     return this.now() >= end + this.rule('roundEndSec') * 1000;
   }
 
+  // ready (and unready) only means something once the round is over and its results are showing
+  canReadyUp() {
+    const round = this.currentRound;
+    if (!round || round.wordChosenTime === undefined) return false;
+    return this.now() >= this.scoreScreenTime(round) - SCORE_SCREEN_SLACK_MS;
+  }
+
   onReadyUp(userId, roundIndex) {
-    if (!this.currentRound || roundIndex !== this.previousRounds.length) return;
-    // clicking again takes the ready back; one click a second so it cannot be spammed
-    const now = this.now();
-    if (now - (this.readyToggledAt.get(userId) ?? -Infinity) < READY_COOLDOWN_MS) return;
-    this.readyToggledAt.set(userId, now);
+    if (!this.currentRound || roundIndex !== this.previousRounds.length || !this.canReadyUp()) return;
+    // clicking again takes the ready back
     if (this.ready.has(userId)) this.ready.delete(userId);
     else {
       this.ready.add(userId);

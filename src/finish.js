@@ -22,10 +22,11 @@ export function recordRoundOf(key, idx, rounds, teamIndex, userId) {
   recordRound(key, idx, r.teamStates[teamIndex].drawerId === userId ? 'd' : 'g', roundWinner(r) === teamIndex, scores[teamIndex] - scores[1 - teamIndex]);
 }
 
-// who was in the game, by team: 0 = mine, 1 = the other side
+// who was in the game, by team: 0 = mine, 1 = the other side; and where I am in that list
 function playersOf(g, teamIndex) {
   return g.teams.flatMap((t, i) => t.userIds.map((id) => [g.users[id]?.name || 'anonymous', i === teamIndex ? 0 : 1]));
 }
+const placeOf = (g, userId) => g.teams.flatMap((t) => t.userIds).indexOf(userId);
 
 // every round and the result of a finished game, for the player `userId`; `rate: false` skips the player score
 export function recordFinishedGame(g, key, userId, { rate = true } = {}) {
@@ -36,7 +37,7 @@ export function recordFinishedGame(g, key, userId, { rate = true } = {}) {
   const mine = totals[teamIndex];
   const theirs = totals[1 - teamIndex];
   const mark = teamPerformance(g.previousRounds, teamIndex, g.settings.roundLengthSec)?.mark;
-  recordGame(key, mine > theirs ? 'win' : mine < theirs ? 'loss' : 'draw', mine, theirs, mark, playersOf(g, teamIndex));
+  recordGame(key, mine > theirs ? 'win' : mine < theirs ? 'loss' : 'draw', mine, theirs, mark, playersOf(g, teamIndex), placeOf(g, userId));
   if (rate) recordMatch(buildFacts(g, key), userId);
   return true;
 }

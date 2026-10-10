@@ -163,6 +163,7 @@ export const S = {
   Presence: 26,
   GameEnded: 27,
   EndVotes: 28,
+  Reaction: 29,
   ServerError: 300,
   ForceRefresh: 301,
 };
@@ -186,6 +187,7 @@ export const C = {
   SwitchVote: 115,
   Presence: 116,
   VoteEnd: 117,
+  Reaction: 118,
 };
 
 // canvas operations

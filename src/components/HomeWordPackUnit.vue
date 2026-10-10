@@ -1,8 +1,8 @@
 <script setup>
-import { ref } from 'vue';
+import KeyHint from './KeyHint.vue';
 
 defineProps({ wordList: Object });
-const open = ref(false);
+const open = defineModel('open', { default: false }); // the preview list (the P key flips it from outside)
 </script>
 
 <template>
@@ -16,7 +16,7 @@ const open = ref(false);
       <div class="hm-wp-num-words">
         {{ wordList.numWords }} word{{ wordList.numWords !== 1 ? 's' : '' }}
         <span v-if="wordList.numWords > 0" class="hm-wp-preview">
-          (<a class="hm-wp-preview-link" @click.prevent="open = !open">{{ open ? 'hide' : 'preview' }}</a>)
+          (<a class="hm-wp-preview-link" @click.prevent="open = !open">{{ open ? 'hide' : 'preview' }}</a><KeyHint k="p" />)
         </span>
       </div>
       <template v-if="open">

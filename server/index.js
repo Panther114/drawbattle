@@ -173,6 +173,7 @@ app.use('/api', api);
 // ---- static client ----
 if (fs.existsSync(DIST)) {
   app.use('/assets', express.static(path.join(DIST, 'assets'), { immutable: true, maxAge: '365d' }));
+  app.use('/fonts', express.static(path.join(DIST, 'fonts'), { maxAge: '30d' }));
   app.use(express.static(DIST, { index: false, maxAge: '1h' }));
   app.use((req, res) => res.sendFile(path.join(DIST, 'index.html')));
 } else {

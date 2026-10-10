@@ -1,7 +1,8 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue';
-defineProps({ wide: { type: Boolean, default: false } });
-const emit = defineEmits(['close-modal']);
+import { Prio, useKeys } from '../keys.js';
+const props = defineProps({ wide: { type: Boolean, default: false }, confirmable: { type: Boolean, default: false } });
+const emit = defineEmits(['close-modal', 'confirm']);
 // play the exit animation before the parent removes the dialog
 const closing = ref(false);
 let timer;
@@ -11,6 +12,14 @@ function close() {
   timer = setTimeout(() => emit('close-modal'), 170);
 }
 onUnmounted(() => clearTimeout(timer));
+// Esc closes, and Enter confirms in a dialog that asks something; no other key works while a dialog is open
+useKeys(
+  [
+    { key: 'esc', typing: true, run: close },
+    { key: 'enter', when: () => props.confirmable, run: () => emit('confirm') },
+  ],
+  { prio: Prio.modal, modal: true },
+);
 onMounted(() => document.body.classList.add('body-modal-open'));
 onUnmounted(() => document.body.classList.remove('body-modal-open'));
 </script>

@@ -15,8 +15,10 @@ import {
   winStreak,
 } from '../shared.js';
 import { track } from '../analytics.js';
+import { useKeys } from '../keys.js';
 import Btn from './Btn.vue';
 import IconWithText from './IconWithText.vue';
+import KeyHint from './KeyHint.vue';
 import TeamBoard from './TeamBoard.vue';
 import Username from './Username.vue';
 
@@ -31,6 +33,7 @@ const props = defineProps({
   isSpectator: { type: Boolean, required: true },
   currentUserId: { type: String, required: true },
   gameSettings: { type: Object, required: true },
+  canReady: { type: Boolean, default: true }, // false while the round's results are not the thing on screen yet
 });
 const emit = defineEmits(['client-message', 'audio-cue']);
 
@@ -44,18 +47,14 @@ const isLastRound = computed(() => roundNumber.value === props.gameSettings.numR
 // without the final drawdown the last round is the end of the game
 const showFinal = computed(() => isLastRound.value && rules.finalDrawdown);
 const lastNoFinal = computed(() => isLastRound.value && !rules.finalDrawdown);
-const readyLock = ref(false);
 const forceAvailable = ref(false);
 const timers = [];
 const later = (fn, ms) => timers.push(setTimeout(fn, ms));
 
+// the same button also takes the ready back
 function ready() {
-  if (readyLock.value) return;
+  if (!props.canReady) return;
   emit('client-message', [C.ReadyUp, props.roundIndex]);
-  readyLock.value = true; // one click a second: the same button also takes the ready back
-  setTimeout(() => {
-    readyLock.value = false;
-  }, 1000);
 }
 function forceStart() {
   emit('client-message', [C.ForceStartNextRound, props.roundIndex]);
@@ -109,6 +108,21 @@ later(() => {
   forceAvailable.value = true;
 }, 11000);
 onUnmounted(() => timers.forEach(clearTimeout));
+
+// Enter while the scores are still counting up skips straight to the end of the reveal (the next Enter readies up)
+function skipReveal() {
+  timers.splice(0).forEach(clearTimeout);
+  shownScores.value = totalScores([...props.previousRounds, props.round], undefined);
+  stage.value = Stage.Recap;
+  later(() => {
+    forceAvailable.value = true;
+  }, 6000);
+}
+useKeys([
+  { key: 'enter', when: () => stage.value !== Stage.Recap && !props.isSpectator, run: skipReveal },
+  { key: 'enter', when: () => stage.value === Stage.Recap && !props.isSpectator && props.canReady, run: ready },
+  { key: 'f', when: () => stage.value === Stage.Recap && !props.isSpectator && showForce.value, run: forceStart },
+]);
 
 // ---- derived display data ----
 const winner = computed(() => roundWinner(props.round));
@@ -219,9 +233,9 @@ void drawingStartTime;
           </div>
         </div>
         <template v-if="!isSpectator">
-          <Btn :disabled="readyLock" :icon="iAmReady ? 'check' : 'next'" :title="iAmReady ? 'click to cancel' : undefined" @click="ready">{{ iAmReady ? 'waiting... (click to cancel)' : lastNoFinal ? 'see results' : 'continue' }}</Btn>
+          <Btn :disabled="!canReady" :icon="iAmReady ? 'check' : 'next'" :title="iAmReady ? 'click to cancel' : undefined" hint="enter" @click="ready">{{ iAmReady ? 'waiting... (click to cancel)' : lastNoFinal ? 'see results' : 'continue' }}</Btn>
           <button v-if="showForce" class="sc-force-start" @click="forceStart">
-            {{ lastNoFinal ? 'show the final results' : `start ${isLastRound ? 'final drawdown' : 'next round'}` }}
+            {{ lastNoFinal ? 'show the final results' : `start ${isLastRound ? 'final drawdown' : 'next round'}` }}<KeyHint k="f" />
           </button>
           <div class="sc-continue-spacer" />
         </template>

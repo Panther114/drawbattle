@@ -6,8 +6,10 @@ import { Sound, finalRoundScores, totalScores, rules, roundScores, teamPerforman
 import { API } from '../wordpacks.js';
 import { track } from '../analytics.js';
 import { nav } from '../nav.js';
+import { useKeys } from '../keys.js';
 import Btn from './Btn.vue';
 import Icon from './Icon.vue';
+import KeyHint from './KeyHint.vue';
 import { buildFacts, computeMatch, formatDelta } from '../rating.js';
 import Footer from './Footer.vue';
 import TeamBoard from './TeamBoard.vue';
@@ -36,13 +38,14 @@ let trackedGuesses = false;
 const timers = [];
 const later = (fn, ms) => timers.push(setTimeout(fn, ms));
 
-function toggleGuesses(e) {
-  showGuesses.value = e.target.checked;
+function setGuesses(on) {
+  showGuesses.value = on;
   if (!trackedGuesses) {
     track('click show guesses', { 'game id': props.game.id, 'user id': props.userId });
     trackedGuesses = true;
   }
 }
+const toggleGuesses = (e) => setGuesses(e.target.checked);
 
 // the final round replays earlier words: pair each team's original attempt with its final-round attempt
 function recapFor(index) {
@@ -58,11 +61,15 @@ function recapFor(index) {
   });
 }
 
+let leaving = false; // (a key can be pressed twice before the answer comes back)
 async function backToLobby() {
+  if (leaving) return;
+  leaving = true;
   const res = await fetch(`${API}/games/${props.game.id}/backToLobby`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
+  leaving = false;
   if (res.status === 200) {
     const params = { gameId: (await res.json()).nextGameId.toUpperCase() };
     if (props.userId in props.game.users) nav.previousGameUserName = props.game.users[props.userId].name;
@@ -111,6 +118,17 @@ function fireConfetti(angle) {
   }, 4000);
 }
 onUnmounted(() => timers.forEach(clearTimeout));
+
+const recapShown = computed(() => stage.value >= Stage.Recap);
+const stepWord = (d) => {
+  wordIndex.value = Math.min(Math.max(wordIndex.value + d, 0), recapWords.value.length - 1);
+};
+useKeys([
+  { key: 'enter', when: () => recapShown.value && props.showBackToLobby, run: backToLobby },
+  { key: 'left', when: () => recapShown.value, run: () => stepWord(-1) },
+  { key: 'right', when: () => recapShown.value, run: () => stepWord(1) },
+  { key: 'g', when: () => recapShown.value && recapWords.value.length > 0, run: () => setGuesses(!showGuesses.value) },
+]);
 
 if (props.game.previousRounds[0]?.teamStates[0]?.canvasOperations === undefined) props.fetchFullGame();
 
@@ -210,10 +228,10 @@ const why = (r) => {
 
     <Transition enter-from-class="sm-fade-enter-from" enter-active-class="sm-fade-enter-active">
       <div v-if="stage >= Stage.Recap" class="sm-recap">
-        <Btn v-if="showBackToLobby" class="sm-back-button" icon="back" @click="backToLobby">back to lobby</Btn>
+        <Btn v-if="showBackToLobby" class="sm-back-button" icon="back" hint="enter" @click="backToLobby">back to lobby</Btn>
         <div v-if="recapWords.length === 0" class="sm-no-rounds">no round was played</div>
         <div v-if="recapWords.length > 0" class="sm-recap-header">
-          <div class="sm-recap-label">game recap</div>
+          <div class="sm-recap-label">game recap <KeyHint k="left" /><KeyHint k="right" /></div>
           <div class="sm-word-select-row">
             <button type="button" class="sm-word-arrow prev" aria-label="previous word" :disabled="wordIndex <= 0" @click="wordIndex = Math.max(wordIndex - 1, 0)" />
             <div class="sm-word-select-wrapper">
@@ -231,7 +249,7 @@ const why = (r) => {
             />
           </div>
           <div class="sm-show-guesses-row">
-            <label class="sm-show-guesses-label" for="showGuesses">show guesses</label>
+            <label class="sm-show-guesses-label" for="showGuesses">show guesses <KeyHint k="g" /></label>
             <input id="showGuesses" type="checkbox" :checked="showGuesses" @change="toggleGuesses" />
           </div>
         </div>

@@ -2,7 +2,9 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { C, MAX_CHAT_LENGTH, UserStatus, rules, voteThreshold } from '../shared.js';
 import { safeStorage } from '../storage.js';
+import { Prio, focusGuess, isTyping, useKeys } from '../keys.js';
 import Icon from './Icon.vue';
+import KeyHint from './KeyHint.vue';
 
 const props = defineProps({
   game: { type: Object, required: true },
@@ -24,10 +26,11 @@ const input = ref();
 let pinned = true; // keep the newest message in view unless the reader scrolled up
 
 // ---- movable / resizable panel: left+bottom offsets and list size, remembered per device ----
-const W_MIN = 220, W_MAX = 520, H_MIN = 90, H_MAX = 520;
+const W_MIN = 200, W_MAX = 520, H_MIN = 80, H_MAX = 520;
+const GEO_DEFAULT = { w: 268, h: 120 };
 const root = ref();
 const panel = ref();
-const geo = reactive({ left: 12, bottom: 12, w: 268, h: 176 });
+const geo = reactive({ left: 12, bottom: 12, w: GEO_DEFAULT.w, h: GEO_DEFAULT.h });
 let custom = false;
 try {
   const g = JSON.parse(storage?.getItem('chatGeo2') ?? 'null');
@@ -84,39 +87,16 @@ function startDrag(e, kind) {
   addEventListener('pointercancel', end);
 }
 function resetGeo() {
-  Object.assign(geo, { left: 12, bottom: 12, w: 268, h: 176 });
+  Object.assign(geo, { left: 12, bottom: 12, ...GEO_DEFAULT });
   custom = false;
   storage?.removeItem('chatGeo2');
 }
 const onWinResize = () => custom && fit();
-// "/" jumps between the chat and the guess box (while either is empty, so a typed "/" still works)
-function onSlash(e) {
-  if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
-  const el = document.activeElement;
-  const typing = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el?.isContentEditable;
-  const inChat = typing && el === input.value;
-  const inGuess = typing && el.classList.contains('mp-guess-input');
-  if (typing && !inChat && !inGuess) return;
-  if (typing && el.value !== '') return;
-  e.preventDefault();
-  if (inChat) {
-    el.blur();
-    document.querySelector('.mp-guess-input')?.focus();
-    return;
-  }
-  setOpen(true);
-  setTab('chat');
-  nextTick(() => input.value?.focus());
-}
 onMounted(() => {
   addEventListener('resize', onWinResize);
-  addEventListener('keydown', onSlash);
   if (custom) nextTick(fit);
 });
-onBeforeUnmount(() => {
-  removeEventListener('resize', onWinResize);
-  removeEventListener('keydown', onSlash);
-});
+onBeforeUnmount(() => removeEventListener('resize', onWinResize));
 
 const messages = computed(() => props.game.chat ?? []);
 const users = computed(() => props.game.users);
@@ -237,6 +217,60 @@ const appeal = () => emit('client-message', [C.SwitchAppeal]);
 const voteSwitch = (id) => emit('client-message', [C.SwitchVote, id]);
 // a dot on the tab while a request is waiting for my answer
 const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !== props.userId && !a.mine));
+
+// ---- keyboard ----
+// (the players tab is only keyboard-driven while the panel has focus, so the digits keep their other jobs otherwise)
+const panelFocused = ref(false);
+const playersShown = computed(() => open.value && tab.value === 'players');
+const onPanelFocusOut = (e) => {
+  if (!panel.value?.contains(e.relatedTarget)) panelFocused.value = false;
+};
+function focusChat() {
+  setOpen(true);
+  setTab('chat');
+  nextTick(() => input.value?.focus());
+}
+function showPlayers() {
+  setTab('players');
+  if (!open.value) setOpen(true);
+  nextTick(() => panel.value?.focus());
+}
+// the rows a digit can votekick, in the order they are listed
+const kickable = computed(() => groups.value.flatMap((g) => g.members).filter((m) => kickInfo(m.id).possible));
+// the first switch request that still waits for my answer
+const pendingAppeal = computed(() => (canVote.value ? appeals.value.find((a) => a.id !== props.userId && !a.mine) : undefined));
+const kickKey = (id) => String(kickable.value.findIndex((m) => m.id === id) + 1);
+const canAskSwitch = () => playersShown.value && !props.isSpectator && !noSwitching.value && (canAppeal.value || myAppeal.value);
+
+useKeys([
+  // "/" jumps between the chat and the guess box (while either is empty, so a typed "/" still works)
+  {
+    key: '/',
+    typing: true,
+    run: () => {
+      const el = document.activeElement;
+      const typing = isTyping(el);
+      const inChat = typing && el === input.value;
+      const inGuess = typing && el.classList.contains('mp-guess-input');
+      if (typing && !inChat && !inGuess) return false;
+      if (typing && el.value !== '') return false;
+      if (inChat) return focusGuess();
+      focusChat();
+    },
+  },
+  { key: 'c', run: () => (open.value ? setOpen(false) : focusChat()) },
+  { key: 'p', run: () => (playersShown.value ? setTab('chat') : showPlayers()) },
+  { key: 's', when: canAskSwitch, run: appeal },
+  { key: 'y', when: () => playersShown.value && pendingAppeal.value !== undefined, run: () => voteSwitch(pendingAppeal.value.id) },
+  ...[0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => ({
+    key: String(i + 1),
+    prio: Prio.panel,
+    when: () => playersShown.value && panelFocused.value && kickable.value[i] !== undefined,
+    run: () => kick(kickable.value[i].id),
+  })),
+]);
+// nothing else to do with Enter: start writing
+useKeys([{ key: 'enter', run: focusChat }], { prio: Prio.fallback });
 </script>
 
 <template>
@@ -244,11 +278,11 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
     <Transition name="gc-swap" mode="out-in">
     <button v-if="!open" key="pill" type="button" class="gc-pill" @click="setOpen(true)">
       <Icon name="chat" class="gc-pill-icon" />
-      chat <kbd class="gc-kbd">/</kbd>
+      chat <KeyHint k="c" />
       <span v-if="unread > 0" :key="unread" class="gc-badge">{{ unread > 9 ? '9+' : unread }}</span>
     </button>
 
-    <section v-else key="panel" ref="panel" class="gc-panel">
+    <section v-else key="panel" ref="panel" class="gc-panel" tabindex="-1" @focusin="panelFocused = true" @focusout="onPanelFocusOut">
       <div class="gc-resize" title="drag to resize" @pointerdown="startDrag($event, 'size')" @dblclick="resetGeo" />
       <header class="gc-head" title="drag to move, double-click to reset" @pointerdown="startDrag($event, 'move')" @dblclick="resetGeo">
         <div class="gc-tabs" role="tablist">
@@ -263,7 +297,7 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
             :class="{ on: tab === 'players' }"
             @click="setTab('players')"
           >
-            <Icon name="people" class="gc-tab-ic c-purple" />players <span class="gc-count">{{ active.length }}</span>
+            <Icon name="people" class="gc-tab-ic c-purple" />players <span class="gc-count">{{ active.length }}</span><KeyHint k="p" />
             <span v-if="needsMe" class="gc-dot" title="a team switch request needs your vote" />
           </button>
         </div>
@@ -290,7 +324,7 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
             type="text"
             class="gc-input"
             :maxlength="MAX_CHAT_LENGTH"
-            :placeholder="isSpectator ? 'chat as a spectator... (/ to switch)' : 'say something... (/ to switch)'"
+            :placeholder="isSpectator ? 'chat as a spectator...' : 'say something...'"
             autocomplete="off"
             autocorrect="off"
             spellcheck="false"
@@ -300,7 +334,7 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
             <Icon name="send" />
           </button>
         </form>
-        <div class="gc-hint"><kbd>/</kbd> jumps between chat and your guess box</div>
+        <div class="gc-hint"><KeyHint k="/" /> chat / guess box <KeyHint k="esc" /> leave <KeyHint k="c" /> hide</div>
       </div>
 
       <div v-show="tab === 'players'" class="gc-players">
@@ -325,7 +359,7 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
               "
               @click="kick(m.id)"
             >
-              <Icon name="ban" />{{ kickInfo(m.id).yes > 0 || kickInfo(m.id).mine ? `kick ${kickInfo(m.id).yes}/${kickInfo(m.id).needed}` : 'votekick' }}
+              <Icon name="ban" />{{ kickInfo(m.id).yes > 0 || kickInfo(m.id).mine ? `kick ${kickInfo(m.id).yes}/${kickInfo(m.id).needed}` : 'votekick' }}<KeyHint v-if="panelFocused && kickable.length <= 9" :k="kickKey(m.id)" />
             </button>
           </div>
         </div>
@@ -334,7 +368,7 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
           <div class="gp-section-title"><Icon name="swap" class="gp-sec-ic" />switch teams</div>
           <template v-if="betweenRounds">
             <button v-if="canAppeal || myAppeal" type="button" class="gp-appeal" @click="appeal">
-              <Icon name="swap" />{{ myAppeal ? 'withdraw my request' : 'ask to switch teams' }}
+              <Icon name="swap" />{{ myAppeal ? 'withdraw my request' : 'ask to switch teams' }}<KeyHint k="s" />
             </button>
             <div v-else class="gp-hint">you need 3+ players on your team to ask</div>
             <div v-for="a in appeals" :key="a.id" class="gp-appeal-row">
@@ -348,7 +382,7 @@ const needsMe = computed(() => canVote.value && appeals.value.some((a) => a.id !
                 :class="{ mine: a.mine, hot: a.yes > 0 }"
                 @click="voteSwitch(a.id)"
               >
-                <Icon name="check" />{{ a.mine ? 'agreed' : 'agree' }} {{ a.yes }}/{{ a.needed }}
+                <Icon name="check" />{{ a.mine ? 'agreed' : 'agree' }} {{ a.yes }}/{{ a.needed }}<KeyHint v-if="pendingAppeal?.id === a.id" k="y" />
               </button>
               <span v-else class="gp-tally">{{ a.yes }}/{{ a.needed }}</span>
             </div>
