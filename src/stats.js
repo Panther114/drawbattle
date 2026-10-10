@@ -1,12 +1,14 @@
 // Personal statistics, kept only in this browser (localStorage). Nothing is sent to the server.
 import { reactive } from 'vue';
 import { safeStorage } from './storage.js';
+import { score } from './rating.js';
+import { markFor } from './shared.js';
 
 const KEY = 'drawbattle.stats.v1';
 const MAX_GAMES = 300;
 const storage = safeStorage('local');
 
-// games: [{ k: game key, t: first seen (ms), r: [[roundIndex, 'd' | 'g', won 0/1, points gained - points lost, team mark]], done, result: 'win' | 'loss' | 'draw', mine, theirs, mark }]
+// games: [{ k: game key, t: first seen (ms), r: [[roundIndex, 'd' | 'g', won 0/1, points gained - points lost]], done, result: 'win' | 'loss' | 'draw', mine, theirs, mark }]
 function load() {
   try {
     const parsed = JSON.parse(storage?.getItem(KEY) ?? 'null');
@@ -38,10 +40,10 @@ function entry(key) {
 }
 
 // one finished round, from the point of view of the local player: role 'd' (drawer) or 'g' (guesser)
-export function recordRound(key, roundIndex, role, won, net = 0, mark = undefined) {
+export function recordRound(key, roundIndex, role, won, net = 0) {
   const g = entry(key);
   if (g.r.some((x) => x[0] === roundIndex)) return false;
-  g.r.push([roundIndex, role === 'd' ? 'd' : 'g', won ? 1 : 0, net, mark]);
+  g.r.push([roundIndex, role === 'd' ? 'd' : 'g', won ? 1 : 0, net]);
   g.r.sort((a, b) => a[0] - b[0]);
   save();
   return true;
@@ -60,6 +62,33 @@ export function recordGame(key, result, mine, theirs, mark = undefined) {
   save();
   return true;
 }
+
+// Games saved before the performance mark existed: estimate it from what this browser kept. The match facts hold the
+// speed of every guess my team made (a draw cannot tell the two teams apart, so both are averaged), and the round
+// list says how many rounds there were. Missed words count as 0, exactly like in a live game.
+function legacyMark(g) {
+  const m = score.matches.find((x) => x.k === g.k);
+  const me = m?.parts.find((p) => p.id === m.me);
+  const rounds = Math.max(g.r.length, ...g.r.map((x) => x[0] + 1));
+  if (!me || !Number.isFinite(rounds) || rounds < 1) return undefined;
+  const side = me.res === 'd' ? m.parts : m.parts.filter((p) => p.res === me.res);
+  let sum = 0;
+  for (const p of side) for (const [role, , s] of p.rounds) if (role === 'g') sum += 0.3 + 0.7 * s;
+  return markFor(sum / (rounds * (me.res === 'd' ? 2 : 1)));
+}
+export function backfillMarks() {
+  let changed = false;
+  for (const g of stats.games) {
+    if (!g.done || g.mark) continue;
+    const mark = legacyMark(g);
+    if (mark) {
+      g.mark = mark;
+      changed = true;
+    }
+  }
+  if (changed) save();
+}
+backfillMarks();
 
 export function resetStats() {
   stats.games.splice(0, stats.games.length);

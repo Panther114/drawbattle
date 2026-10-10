@@ -631,8 +631,7 @@ function recordRoundAt(idx, rounds) {
   const r = rounds[idx];
   if (!g || ti < 0 || !r || r.word === undefined) return;
   const scores = roundScores(r);
-  const mark = teamPerformance(rounds.slice(0, idx + 1), ti, g.settings.roundLengthSec)?.mark;
-  recordRound(gameKey.value, idx, r.teamStates[ti].drawerId === userId.value ? 'd' : 'g', roundWinner(r) === ti, scores[ti] - scores[1 - ti], mark);
+  recordRound(gameKey.value, idx, r.teamStates[ti].drawerId === userId.value ? 'd' : 'g', roundWinner(r) === ti, scores[ti] - scores[1 - ti]);
 }
 function recordFinishedRounds() {
   const g = game.value;

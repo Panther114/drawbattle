@@ -97,15 +97,14 @@ function reset() {
             <span class="stt-rd-n">{{ r[0] + 1 }}</span>
             <template v-if="r[3] !== undefined">{{ formatDelta(r[3]) }}</template>
             <template v-else>{{ r[2] ? 'won' : 'lost' }}</template>
-            <span v-if="r[4]" class="pf-mark pf-sm" :class="'pf-' + r[4]">{{ r[4] }}</span>
           </span>
         </div>
       </div>
     </div>
 
     <div class="stt-foot">
-      <p>a round counts as a win when your team guessed the word first. under each game, every round shows the points your team gained or lost against the other team (and the team performance mark so far). the final drawdown is not counted in the drawer / guesser rates.</p>
-      <p>team performance mark, S to F: how fast and how often your team got the word, whether or not it won the round. an S means nearly every word, quickly.</p>
+      <p>a round counts as a win when your team guessed the word first. under each game, every round shows the points your team gained or lost against the other team. the final drawdown is not counted in the drawer / guesser rates.</p>
+      <p>team performance mark, S to F: one per game. it grades how fast and how often your team got the words, whether or not it won. older games are worked out from the data stored here, so they are estimates.</p>
       <p>player score: every match shares out +100 points. you earn points for fast first guesses and quick drawings, plus a bonus for winning, and you give up the average of the lobby.</p>
       <button v-if="stats.games.length || score.history.length" class="stt-reset" @click="reset"><Icon name="trash" />{{ confirming ? 'click again to erase' : 'reset my stats' }}</button>
     </div>

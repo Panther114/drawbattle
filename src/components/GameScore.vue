@@ -11,8 +11,6 @@ import {
   nextDrawer,
   roundScores,
   roundWinner,
-  roundPerformance,
-  teamPerformance,
   totalScores,
   winStreak,
 } from '../shared.js';
@@ -113,17 +111,6 @@ later(() => {
 onUnmounted(() => timers.forEach(clearTimeout));
 
 // ---- derived display data ----
-// team performance so far (this round included), independent of who won
-const roundLen = computed(() => props.gameSettings.roundLengthSec);
-const performance = computed(() => {
-  const rounds = [...props.previousRounds, props.round];
-  return props.teams.map((_, i) => ({
-    ...teamPerformance(rounds, i, roundLen.value),
-    thisRound: roundPerformance(props.round, i, roundLen.value),
-  }));
-});
-const perfTitle = (p) =>
-  `team performance after ${roundNumber.value} round${roundNumber.value === 1 ? '' : 's'}: got ${Math.round((p.rate ?? 0) * 100)}% of the words`;
 const winner = computed(() => roundWinner(props.round));
 const nextDrawers = computed(() => {
   const w = winner.value;
@@ -184,12 +171,6 @@ void drawingStartTime;
     <div class="sc-team-columns">
       <div v-for="(team, i) in teams" :key="i" class="sc-team-column">
         <div class="sc-team-score">{{ shownScores[i] }}</div>
-        <Transition name="sc-fade">
-          <div v-if="stage >= Stage.Drawer && performance[i].mark" class="sc-perf" :title="perfTitle(performance[i])">
-            <span class="sc-perf-label">performance</span>
-            <span class="pf-mark" :class="'pf-' + performance[i].mark">{{ performance[i].mark }}</span>
-          </div>
-        </Transition>
         <Transition mode="out-in" name="sc-fade">
           <div v-if="drawerBlock(i)?.kind === 'winner'" key="winningDrawer" class="sc-drawer">
             <div class="sc-small-header">winner</div>

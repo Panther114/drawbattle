@@ -2,7 +2,7 @@
 import { computed, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import confetti from 'canvas-confetti';
-import { Sound, finalRoundScores, totalScores, rules, roundScores } from '../shared.js';
+import { Sound, finalRoundScores, totalScores, rules, roundScores, teamPerformance } from '../shared.js';
 import { API } from '../wordpacks.js';
 import { track } from '../analytics.js';
 import { nav } from '../nav.js';
@@ -126,6 +126,8 @@ const winningTeam = computed(() => {
   });
   return best === undefined ? undefined : props.game.teams[best];
 });
+// one performance mark per team for the whole game (the final drawdown is not part of it)
+const marks = computed(() => props.game.teams.map((_, i) => teamPerformance(props.game.previousRounds, i, props.game.settings.roundLengthSec)));
 const startTimeFor = (original, teamIdx, roundIdx) => {
   const r = props.game.previousRounds[roundIdx];
   return (
@@ -167,6 +169,16 @@ const why = (r) => {
     <div class="sm-team-columns">
       <div v-for="(team, i) in game.teams" :key="i" class="sm-team-column">
         <div class="sm-team-score">{{ shownScores[i] }}</div>
+        <Transition enter-from-class="sm-fade-enter-from" enter-active-class="sm-fade-enter-active">
+          <div
+            v-if="stage >= Stage.Winner && marks[i]"
+            class="sc-perf"
+            :title="`team performance: got ${Math.round(marks[i].rate * 100)}% of the words, scored on speed and word rate (not on winning)`"
+          >
+            <span class="sc-perf-label">team performance</span>
+            <span class="pf-mark" :class="'pf-' + marks[i].mark">{{ marks[i].mark }}</span>
+          </div>
+        </Transition>
       </div>
     </div>
 
